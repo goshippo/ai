@@ -1,0 +1,31 @@
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Env
+.env
+.env.local
+.env*.local
+
+# ClawHub local state
+.clawhub/
+
+# Claude metadata & per-user state, never commit.
+# (Note: this excludes `.claude/` and `.claude-code/`, which are user-level
+# Claude Code state. It does NOT match `.claude-plugin/`, which is the
+# plugin manifest directory and is committed intentionally.)
+.claude/
+.claude-code/
+.claude.json
+CLAUDE.local.md
+
+# Build artifacts
+dist/
+build/

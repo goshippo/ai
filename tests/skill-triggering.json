@@ -1,0 +1,162 @@
+[
+  {
+    "skill": "rate-shopping",
+    "should_trigger": true,
+    "prompts": [
+      "Compare shipping rates from San Francisco to New York for a 2lb package",
+      "What's the cheapest USPS rate to Chicago for a 1lb envelope?",
+      "Get me FedEx and UPS rates for an international shipment from Seattle to London",
+      "How much would it cost to ship a 5lb 12x10x4 inch box from 10001 to 94103?",
+      "Show me all carrier options and prices for shipping a small parcel domestically"
+    ]
+  },
+  {
+    "skill": "rate-shopping",
+    "should_trigger": false,
+    "prompts": [
+      "Help me write a Python script that reads a CSV file",
+      "Explain how TCP congestion control works",
+      "What's the capital of France?"
+    ]
+  },
+  {
+    "skill": "tracking",
+    "should_trigger": true,
+    "prompts": [
+      "Track USPS package 9400111899223456789012",
+      "Where is my FedEx shipment 794644746498?",
+      "Show me the tracking history for UPS tracking number 1Z999AA10123456784",
+      "Set up a webhook to get tracking updates for my shipments via Shippo",
+      "Get the current location and status of tracking number EE123456789US"
+    ]
+  },
+  {
+    "skill": "tracking",
+    "should_trigger": false,
+    "prompts": [
+      "Generate a UUID in JavaScript",
+      "How do I configure nginx as a reverse proxy?",
+      "Recommend a good book about distributed systems"
+    ]
+  },
+  {
+    "skill": "address-validation",
+    "should_trigger": true,
+    "prompts": [
+      "Validate this address: 350 5th Ave, New York, NY 10118",
+      "Is '215 Clayton St, San Francisco, CA' a valid shipping address via Shippo?",
+      "Standardize and verify the address 1600 Pennsylvania Ave NW Washington DC",
+      "Parse this freeform address into structured fields and confirm it's deliverable: 1 Infinite Loop Cupertino CA 95014",
+      "Check if this customer's shipping address exists and is correctly formatted: 233 S Wacker Dr, Chicago, IL 60606"
+    ]
+  },
+  {
+    "skill": "address-validation",
+    "should_trigger": false,
+    "prompts": [
+      "Write a regex to match email addresses",
+      "What are some good restaurants in Brooklyn?",
+      "Explain the difference between IPv4 and IPv6 addressing"
+    ]
+  },
+  {
+    "skill": "label-purchase",
+    "should_trigger": true,
+    "prompts": [
+      "Buy a USPS Priority Mail label for a 2lb package from Oakland to Boston",
+      "Purchase a shipping label and generate the PDF for me",
+      "Create an international FedEx label with customs declarations to ship a $50 item to Germany",
+      "Generate a return shipping label for a customer in Texas",
+      "Void and refund the label I just purchased, transaction ID abc123"
+    ]
+  },
+  {
+    "skill": "label-purchase",
+    "should_trigger": false,
+    "prompts": [
+      "Help me design a logo for my startup",
+      "What's a good algorithm for sorting a billion integers?",
+      "Translate 'good morning' into Japanese"
+    ]
+  },
+  {
+    "skill": "batch-shipping",
+    "should_trigger": true,
+    "prompts": [
+      "I have a CSV with 500 orders, process them as a batch shipment in Shippo",
+      "Create a batch and purchase labels for all shipments in bulk",
+      "Generate an end-of-day SCAN form / manifest for today's USPS labels",
+      "Bulk-buy labels for these 200 orders from my fulfillment CSV",
+      "Set up batch processing to handle our daily order export from Shopify"
+    ]
+  },
+  {
+    "skill": "batch-shipping",
+    "should_trigger": false,
+    "prompts": [
+      "What's the best way to learn Rust?",
+      "Convert this image from PNG to WebP",
+      "Summarize the plot of Hamlet"
+    ]
+  },
+  {
+    "skill": "shipping-analysis",
+    "should_trigger": true,
+    "prompts": [
+      "Analyze our shipping spend last quarter and find which carriers cost the most",
+      "Compare USPS, UPS, and FedEx pricing for our typical 3lb package across 50 destinations",
+      "Optimize our package dimensions to reduce dimensional-weight surcharges",
+      "Review our historical Shippo shipments and recommend a cheaper carrier mix",
+      "Run a geographic cost analysis: ship from Reno vs Memphis to top 10 metro areas"
+    ]
+  },
+  {
+    "skill": "shipping-analysis",
+    "should_trigger": false,
+    "prompts": [
+      "Write a SQL query that joins three tables on user_id",
+      "What is the time complexity of quicksort?",
+      "Recommend a workout routine for beginners"
+    ]
+  },
+  {
+    "skill": "shippo-best-practices",
+    "should_trigger": true,
+    "prompts": [
+      "I'm building a checkout flow with Shippo, should I use Rates at Checkout or full Shipments+Transactions?",
+      "What's the right Shippo integration pattern for a bulk fulfillment pipeline?",
+      "Review my Shippo integration design, am I using v1 or v2 address fields correctly?",
+      "Help me plan a Shippo integration for an e-commerce site with international shipping",
+      "What are the best practices for confirming live label purchases in our Shippo workflow?"
+    ]
+  },
+  {
+    "skill": "shippo-best-practices",
+    "should_trigger": false,
+    "prompts": [
+      "How do I deploy a static site to Vercel?",
+      "Explain monads in Haskell",
+      "What's the difference between SQL and NoSQL?"
+    ]
+  },
+  {
+    "skill": "upgrade-shippo",
+    "should_trigger": true,
+    "prompts": [
+      "A new Shippo API version shipped, what should we check before adopting it and what might break in our webhook payloads?",
+      "We're getting version-mismatch errors on the Shippo API, help me resolve them",
+      "Audit our existing Shippo integration for deprecated API fields and webhook payload changes",
+      "Migrate our integration to the newest Shippo API version and document the breaking changes",
+      "Our Shippo webhook handler broke after an event payload change, how do I make it version-safe?"
+    ]
+  },
+  {
+    "skill": "upgrade-shippo",
+    "should_trigger": false,
+    "prompts": [
+      "Upgrade my Ubuntu server from 20.04 to 22.04",
+      "How do I bump a Python package version in pyproject.toml?",
+      "What's new in TypeScript 5.5?"
+    ]
+  }
+]

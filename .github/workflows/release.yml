@@ -1,0 +1,92 @@
+name: Release app-plugin
+
+# Cuts a GitHub Release of the Claude app plugin ZIP (claude.ai / Claude
+# Desktop / Cowork) whenever package.json:version is bumped on main.
+#
+# This reuses the repo's existing version pipeline rather than a parallel
+# trigger: per CONTRIBUTING "Version discipline", any change to a skill
+# (skills/<name>/SKILL.md or skills/shippo/references/) requires bumping
+# package.json:version. That bump is the release signal. The job is gated on
+# whether a release for the current version already exists, so it fires exactly
+# once per version, a skill change without a version bump produces no release
+# (enforcing the discipline), and re-pushes at the same version are no-ops.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'
+      - 'package.json'
+      - 'providers/claude/plugin/**'
+      - 'scripts/build-app-plugin.js'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Re-publish the current package.json version even if its release already exists (refreshes assets)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  # One release job at a time; never cancel a run mid-publish.
+  group: release-app-plugin
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Resolve version and decide whether to release
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          VERSION="$(jq -r .version package.json)"
+          TAG="v${VERSION}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            if [ "$FORCE" = "true" ]; then
+              echo "Release $TAG exists; --force set, will refresh its assets."
+              echo "release=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Release $TAG already exists; nothing to do. Bump package.json:version to cut a new release."
+              echo "release=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "No release for $TAG yet; will create it."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build app-plugin ZIP
+        if: steps.gate.outputs.release == 'true'
+        run: |
+          npm run build:app-plugin
+          echo "Built artifact:"
+          ls -la dist/app-plugin/
+
+      - name: Publish GitHub Release
+        if: steps.gate.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.gate.outputs.tag }}
+        run: |
+          set -e
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
+              --notes "Shippo plugin packaged for the Claude apps (claude.ai / Claude Desktop / Cowork). Download shippo-plugin.zip and add it via the app's Plugins UI; admins can provision it org-wide via Organization settings → Plugins (one upload, all skills)."
+          fi
+          # --clobber so re-runs replace the same-named asset idempotently.
+          gh release upload "$TAG" dist/app-plugin/shippo-plugin.zip --clobber
+          echo "Published shippo-plugin.zip to release $TAG."

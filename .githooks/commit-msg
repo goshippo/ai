@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Guardrail: keep AI-authorship trailers out of commit messages (they are public).
+# Override (rarely): git commit --no-verify
+set -uo pipefail
+TRAILER_RE='[Cc]o-[Aa]uthored-[Bb]y:[[:space:]]*Claude|Generated with \[?Claude Code'
+if grep -nIE "$TRAILER_RE" "$1" >/dev/null 2>&1; then
+  echo "BLOCKED: commit message contains an AI-authorship trailer:"
+  grep -nIE "$TRAILER_RE" "$1" | head
+  echo "Reword the message, or override with: git commit --no-verify"
+  exit 1
+fi
+exit 0

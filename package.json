@@ -1,0 +1,29 @@
+{
+  "name": "@goshippo/ai",
+  "version": "1.4.0",
+  "description": "Shippo's AI distribution surfaces: Claude Code plugin, ClawHub skill, and future provider channels.",
+  "private": true,
+  "homepage": "https://github.com/goshippo/ai",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/goshippo/ai.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "inject-version": "node scripts/inject-version.js",
+    "sync": "node scripts/inject-version.js && node scripts/sync.js && node scripts/compose-clawhub-digest.js && node scripts/build-clawhub-bundle.js",
+    "sync:claude": "node scripts/inject-version.js && node scripts/sync.js",
+    "sync:clawhub": "node scripts/compose-clawhub-digest.js && node scripts/build-clawhub-bundle.js",
+    "compose:clawhub": "node scripts/compose-clawhub-digest.js",
+    "build:app-plugin": "node scripts/build-app-plugin.js",
+    "check:app-plugin": "node scripts/build-app-plugin.js --check",
+    "check-drift": "git diff --quiet -- providers/ '.claude-plugin/' ':(exclude)providers/README.md' ':(exclude)providers/clawhub/skills/goshippo/SKILL.md.template' || (echo 'ERROR: providers/ differs from HEAD after sync. If you just edited canonical (skills/ or package.json), this is EXPECTED: commit the regenerated providers/ files with your canonical change. If you did not touch canonical, the committed mirrors were stale, run \"npm run sync\" and commit the result.' && exit 1)",
+    "check-no-generated-edits": "scripts/check-no-generated-edits.sh",
+    "validate-frontmatter": "node scripts/validate-frontmatter.js",
+    "check-tool-references": "node scripts/check-tool-references.js",
+    "test": "npm run check-no-generated-edits && npm run sync && npm run validate-frontmatter && npm run check-drift && npm run check-tool-references"
+  }
+}

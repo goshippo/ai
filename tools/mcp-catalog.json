@@ -1,0 +1,19 @@
+[
+  "CreateAddress", "UpdateAddress", "DeleteAddress", "GetAddress", "ListAddresses", "ParseAddress", "ValidateAddress", "ValidateAddressByID",
+  "CreateBatch", "PurchaseBatch", "GetBatch",
+  "CreateCarrierAccount", "UpdateCarrierAccount", "GetCarrierAccount", "ListCarrierAccounts", "GetCarrierRegistrationStatus", "GetCarrierParcelTemplate", "ListCarrierParcelTemplates",
+  "CreateCustomsDeclaration", "CreateCustomsItem", "GetCustomsDeclaration", "GetCustomsItem", "ListCustomsDeclarations", "ListCustomsItems",
+  "CreateManifest", "GetManifest", "ListManifests",
+  "CreateOrder", "GetOrder", "ListOrders",
+  "CreateParcel", "CreateUserParcelTemplate", "UpdateUserParcelTemplate", "DeleteUserParcelTemplate", "UpdateDefaultParcelTemplate", "DeleteDefaultParcelTemplate", "GetParcel", "ListParcels", "GetUserParcelTemplate", "ListUserParcelTemplates", "GetDefaultParcelTemplate",
+  "CreatePickup",
+  "CreateLiveRate", "GetRate",
+  "CreateRefund", "GetRefund", "ListRefunds",
+  "CreateServiceGroup", "UpdateServiceGroup", "DeleteServiceGroup", "ListServiceGroups",
+  "CreateShipment", "AddShipmentsToBatch", "RemoveShipmentsFromBatch", "GetShipment", "ListShipments", "ListShipmentRates", "ListShipmentRatesByCurrencyCode",
+  "CreateShippoAccount", "UpdateShippoAccount", "GetShippoAccount", "ListShippoAccounts",
+  "CreateTrack", "GetTrack",
+  "CreateTransaction", "GetTransaction", "ListTransactions",
+  "createWebhook", "updateWebhook", "deleteWebhook", "getWebhook", "listWebhooks",
+  "InitiateOauth2Signin"
+]

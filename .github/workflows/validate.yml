@@ -1,0 +1,456 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # Callable as a gate by other workflows (e.g. publish-clawhub.yml).
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  # Cancel an in-flight Validate when a newer commit lands on the same PR/branch;
+  # the required check only needs to be green on the head commit. Matches the
+  # concurrency groups already used by skillsaw.yml and skill-eval.yml.
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Need full history so the "Reject direct edits to auto-generated files"
+          # step can `git diff` against the PR base SHA.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          # Node 22+ required by clawhub CLI's transitive dep (p-retry@8).
+          # GitHub is also deprecating Node 20 on 2026-06-02; this stays
+          # ahead of that.
+          node-version: '22'
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
+        run: bash scripts/retry.sh 3 pip install pyyaml jsonschema
+
+      - name: Reject direct edits to auto-generated files
+        if: github.event_name == 'pull_request'
+        run: scripts/check-no-generated-edits.sh ${{ github.event.pull_request.base.sha }}
+
+      - name: Validate JSON manifests (syntax)
+        run: |
+          set -e
+          for json_file in .claude-plugin/marketplace.json providers/claude/plugin/.claude-plugin/plugin.json providers/claude/plugin/.mcp.json; do
+            echo "Validating $json_file"
+            python3 -m json.tool "$json_file" > /dev/null
+          done
+
+      - name: Scan for leaked Shippo API tokens
+        run: |
+          set -e
+          # Cheap, fast, fails the build if any tracked file contains what looks
+          # like a real Shippo token (shippo_live_<40 hex> or shippo_test_<40 hex>).
+          # CHANGELOG.md is exempt, it may reference the format historically.
+          # Uses git grep so .gitignore'd cruft / node_modules can't trip it.
+          # Pattern is broken up below so this very check file doesn't self-match.
+          PATTERN='shippo_(live|test)_[a-f0-9]{40}'
+          if git grep -nE "$PATTERN" -- ':!CHANGELOG.md' ':!.github/workflows/validate.yml'; then
+            echo "::error::Found what appears to be a real Shippo API token in a tracked file (see matches above). Tokens must never be committed. Rotate the token immediately and remove it from history."
+            exit 1
+          fi
+          echo "token-leak scan: clean"
+
+      - name: Scan for ClawScan-flaggable token-shaped patterns
+        run: |
+          set -e
+          # ClawScan (ClawHub's static-analysis layer) flags two patterns in skill
+          # content that LOOK like exposed tokens even when they're placeholders:
+          #
+          #   1. Assignment shape "VARNAME=shippo_test_...", flagged even with
+          #      'xxxxx' placeholder suffix because the assignment shape itself
+          #      is what its regex matches. Discovered v1.1.1 → 1.1.2 publish loop.
+          #
+          #   2. Real-looking token suffix "shippo_(test|live)_<alphanum>" where
+          #      the suffix isn't an all-'x' placeholder or '*' wildcard.
+          #      Discovered v1.1.0 → 1.1.1 publish loop.
+          #
+          # Skill content should describe the format prosaically (e.g. "a token
+          # starting with shippo_test_") or use angle-bracket placeholders like
+          # "<your-shippo-key>", never the VARNAME=value assignment shape.
+          # CHANGELOG / this very file are exempt (they document the patterns).
+          FAILED=0
+          # Pattern 1: assignment shape
+          if git grep -nE '[A-Z_]{3,}[[:space:]]*=[[:space:]]*shippo_(test|live)_' \
+              -- ':!CHANGELOG.md' ':!.github/workflows/validate.yml'; then
+            echo "::error::Found 'VARNAME=shippo_test_...' or 'VARNAME=shippo_live_...' assignment shape, ClawScan flags this as 'suspicious.exposed_secret_literal' even with placeholder suffixes. Rewrite as prose or angle-bracket placeholder (<your-shippo-key>) instead."
+            FAILED=1
+          fi
+          # Pattern 2: real-looking token suffix (alphanum, not all-x)
+          # Match shippo_test_/shippo_live_ followed by 6+ chars, where chars
+          # contain at least one non-'x'. The 6+ threshold avoids false positives
+          # on prose like 'shippo_test_xxx'.
+          if git grep -nE 'shippo_(test|live)_[a-z0-9]{6,}' \
+              -- ':!CHANGELOG.md' ':!.github/workflows/validate.yml' \
+              | grep -vE 'shippo_(test|live)_x+\b' \
+              | grep .; then
+            echo "::error::Found 'shippo_test_<alphanum>' or 'shippo_live_<alphanum>' with a non-placeholder suffix (matches above, after filtering out pure-x placeholders). ClawScan flags this as 'suspicious.exposed_secret_literal'. Use 'shippo_test_xxxxx' or '<your-shippo-key>' placeholder forms instead."
+            FAILED=1
+          fi
+          if [ "$FAILED" = "1" ]; then exit 1; fi
+          echo "clawscan-compat scan: clean"
+
+      - name: Validate .mcp.json schema shape (post-migration)
+        run: |
+          # This guards against a class of bug where someone bakes their personal
+          # token into the distributed plugin, or where the endpoint URL drifts
+          # and breaks every install. The OAuth .mcp.json must point at the
+          # production endpoint https://mcp.shippo.com and carry NO static
+          # auth header (the per-user OAuth token is obtained by the client).
+          python3 - <<'PY'
+          import json, re, sys
+
+          path = "providers/claude/plugin/.mcp.json"
+          with open(path) as f:
+              doc = json.load(f)
+
+          errors = []
+          servers = doc.get("mcpServers")
+          if not isinstance(servers, dict) or len(servers) != 1:
+              errors.append(f"{path}: mcpServers must be an object with exactly one entry")
+          else:
+              key, entry = next(iter(servers.items()))
+              if not isinstance(entry, dict):
+                  errors.append(f"{path}: mcpServers.{key} must be an object")
+              else:
+                  if entry.get("type") != "http":
+                      errors.append(f"{path}: mcpServers.{key}.type must be 'http' (got {entry.get('type')!r})")
+                  url = entry.get("url", "")
+                  if not re.match(r"^https://mcp\.shippo\.com/?$", url):
+                      errors.append(f"{path}: mcpServers.{key}.url must be 'https://mcp.shippo.com' (got {url!r})")
+                  if "headers" in entry:
+                      errors.append(f"{path}: mcpServers.{key} must NOT carry a static auth header; the OAuth endpoint authorizes per-user (got headers {entry.get('headers')!r})")
+          if errors:
+              for e in errors:
+                  print(f"::error file={path}::{e}")
+              sys.exit(1)
+          print(f"{path}: schema shape OK")
+          PY
+
+      - name: Validate Codex .mcp.json schema shape
+        run: |
+          # The Codex .mcp.json uses a BARE top-level server map (no mcpServers
+          # wrapper). A snake_case "mcp_servers" wrapper is silently ignored by
+          # current Codex (openai/codex#22105), so reject it explicitly. Like the
+          # Claude file, it must point at the production OAuth endpoint and carry
+          # no static auth header.
+          python3 - <<'PY'
+          import json, re, sys
+
+          path = "providers/codex/plugin/.mcp.json"
+          with open(path) as f:
+              doc = json.load(f)
+
+          errors = []
+          if "mcp_servers" in doc:
+              errors.append(f"{path}: snake_case 'mcp_servers' wrapper is silently ignored by current Codex (openai/codex#22105); use a bare server map or camelCase 'mcpServers'")
+          servers = doc.get("mcpServers", doc)
+          if not isinstance(servers, dict) or "shippo" not in servers:
+              errors.append(f"{path}: expected a 'shippo' server entry (bare map or under 'mcpServers')")
+          else:
+              entry = servers["shippo"]
+              if not isinstance(entry, dict):
+                  errors.append(f"{path}: shippo entry must be an object")
+              else:
+                  url = entry.get("url", "")
+                  if not re.match(r"^https://mcp\.shippo\.com/?$", url):
+                      errors.append(f"{path}: shippo.url must be 'https://mcp.shippo.com' (got {url!r})")
+                  if "headers" in entry:
+                      errors.append(f"{path}: shippo must NOT carry a static auth header; the OAuth endpoint authorizes per-user (got headers {entry.get('headers')!r})")
+          if errors:
+              for e in errors:
+                  print(f"::error file={path}::{e}")
+              sys.exit(1)
+          print(f"{path}: schema shape OK")
+          PY
+
+      - name: Probe MCP server reachability + OAuth challenge
+        run: |
+          set -e
+          # mcp.shippo.com is live and OAuth-gated. A healthy unauthenticated
+          # initialize returns HTTP 401 ("Missing Bearer token") with an OAuth
+          # discovery pointer, NOT a 2xx JSON-RPC result. We assert:
+          #   (a) POST / initialize -> 401  (server up, route exists, auth-gated)
+          #   (b) the protected-resource metadata is published and names an
+          #       authorization server.
+          # NOTE: some proxies remap the WWW-Authenticate header (e.g. to
+          # x-amzn-remapped-www-authenticate), so we verify the well-known
+          # resource document rather than asserting on the WWW-Authenticate header.
+          URL='https://mcp.shippo.com'
+          STATUS=$(curl -sS --retry 3 --retry-connrefused --retry-delay 5 -o /dev/null -w '%{http_code}' --max-time 20 -X POST \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-reachability-probe","version":"1.0"}}}' \
+            "$URL")
+          if [ "$STATUS" != "401" ]; then
+            echo "::error::Expected HTTP 401 (OAuth-gated) from POST $URL initialize, got $STATUS. Endpoint may be down or the route/path changed."
+            exit 1
+          fi
+          curl -sS --retry 3 --retry-connrefused --retry-delay 5 --max-time 20 "$URL/.well-known/oauth-protected-resource" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('authorization_servers'), 'no authorization_servers in protected-resource metadata'; print('OAuth metadata OK: AS=%s resource=%s' % (d['authorization_servers'], d.get('resource')))"
+          echo "MCP reachable: HTTP 401 (OAuth-gated) and OAuth metadata published."
+
+      - name: Validate JSON manifests against published JSON-Schema
+        run: |
+          python3 - <<'PY'
+          import json, sys, time, urllib.request
+          from jsonschema import Draft7Validator
+
+          # NOTE: marketplace.json declares $schema=anthropic.com/claude-code/marketplace.schema.json
+          # but that URL currently 404s. We pin to the schemastore mirror, which is the
+          # canonical published schema. Revisit if Anthropic publishes a working URL.
+          PAIRS = [
+              (".claude-plugin/marketplace.json",
+               "https://json.schemastore.org/claude-code-marketplace.json"),
+              ("providers/claude/plugin/.claude-plugin/plugin.json",
+               "https://json.schemastore.org/claude-code-plugin-manifest.json"),
+          ]
+
+          failed = False
+          for manifest, url in PAIRS:
+              print(f"Validating {manifest} against {url}")
+              schema = None
+              for attempt in range(1, 4):
+                  try:
+                      with urllib.request.urlopen(url, timeout=15) as r:
+                          schema = json.loads(r.read())
+                      break
+                  except Exception as e:
+                      if attempt == 3:
+                          print(f"::error file={manifest}::could not fetch schema {url} after 3 attempts: {e}")
+                          failed = True
+                      else:
+                          print(f"::warning::fetch {url} attempt {attempt}/3 failed ({e}); retrying in {attempt*5}s")
+                          time.sleep(attempt * 5)
+              if schema is None:
+                  continue
+              with open(manifest) as f:
+                  instance = json.load(f)
+              errs = list(Draft7Validator(schema).iter_errors(instance))
+              if errs:
+                  for e in errs:
+                      path = "/".join(str(p) for p in e.absolute_path) or "(root)"
+                      print(f"::error file={manifest}::{path}: {e.message}")
+                  failed = True
+              else:
+                  print(f"  OK")
+          sys.exit(1 if failed else 0)
+          PY
+
+      - name: Smoke-test plugin loader (claude plugin validate)
+        run: |
+          set -e
+          # First-party loader smoke test. Runs the actual Claude Code CLI's
+          # plugin validator against our bundle to catch loader-rejected
+          # cases the JSON/YAML schema checks miss (missing required fields,
+          # frontmatter that the agent-skills spec accepts but the Claude
+          # Code loader rejects, malformed .mcp.json, etc.). No API key
+          # needed, validate runs offline against local files.
+          bash scripts/retry.sh 3 npm install -g @anthropic-ai/claude-code@2.1.163
+          claude --version
+          claude plugin validate .claude-plugin/marketplace.json
+          claude plugin validate providers/claude/plugin
+
+      - name: Smoke-test plugin install (end-to-end install flow)
+        run: |
+          set -e
+          # Goes one level beyond `plugin validate`: actually exercises the
+          # marketplace-add → install → list flow that a real user runs.
+          # Catches a class of bug that `validate` misses, e.g. marketplace.json
+          # points at a plugin path/version the install resolver can't find,
+          # or the install pipeline rejects fields that validation accepts.
+          # No API key needed; this is filesystem + manifest resolution only.
+          #
+          # Uses a temp HOME so the install doesn't pollute the runner state
+          # or interact with anything else.
+          export HOME=$(mktemp -d)
+          claude plugin marketplace add "$PWD/.claude-plugin/marketplace.json"
+          claude plugin install shippo@shippo
+          claude plugin list | tee /tmp/plugin-list.txt
+          grep -q '^\s*❯ shippo@shippo' /tmp/plugin-list.txt \
+            || (echo "::error::plugin 'shippo@shippo' not present in 'plugin list' after install"; exit 1)
+          echo "✓ install flow works end-to-end"
+
+      - name: Smoke-test Codex plugin loader (codex CLI)
+        run: |
+          set -e
+          # Validate the Codex plugin's marketplace catalog through OpenAI's
+          # actual loader, mirroring the Claude plugin smoke tests above. We stop
+          # at `marketplace add` + `list`: a full `codex plugin add` would clone
+          # the git-subdir source (needs the repo public) and trigger ON_INSTALL
+          # OAuth, neither of which works in CI. This still exercises OpenAI's
+          # real catalog parser on .agents/plugins/marketplace.json.
+          bash scripts/retry.sh 3 npm install -g @openai/codex@0.136.0
+          codex --version
+          codex plugin marketplace add "$PWD"
+          codex plugin list | tee /tmp/codex-plugins.txt
+          grep -q 'shippo@shippo' /tmp/codex-plugins.txt \
+            || (echo "::error::codex plugin list did not discover 'shippo@shippo' from .agents/plugins/marketplace.json"; exit 1)
+          echo "✓ Codex catalog parsed by the codex CLI; shippo@shippo discovered"
+
+      - name: Validate SKILL.md frontmatter (custom)
+        run: npm run validate-frontmatter
+
+      - name: Validate app-plugin package source
+        # The Claude apps (claude.ai / Desktop / Cowork) load the plugin as a
+        # single ZIP built by scripts/build-app-plugin.js. This asserts the
+        # plugin source (providers/claude/plugin/) is well-formed (manifest with
+        # name+version, at least one skill) before a release is built.
+        run: npm run check:app-plugin
+
+      - name: Check skill tool references against MCP catalog
+        # Catches the drift class where a skill references an MCP tool name
+        # that doesn't exist on the live server (e.g. kebab-case
+        # leftovers, typos, renames). Catalog is vendored at
+        # tools/mcp-catalog.json, regenerate from the live server's
+        # tools/list when the MCP server adds tools.
+        run: npm run check-tool-references
+
+      - name: Validate skills against agentskills.io spec (skills-ref)
+        run: |
+          set -e
+          # Anthropic's first-party validator. Runs against canonical skills/
+          # and the 1:1 mirrors under providers/claude/plugin/skills/ and
+          # providers/codex/skills/. The ClawHub bundle has a `version:` field
+          # required by ClawHub's spec but rejected by the agent-skills spec, so
+          # it's intentionally not validated here, clawhub sync --dry-run covers it.
+          for skill_dir in skills/*/ providers/claude/plugin/skills/*/ providers/codex/plugin/skills/*/; do
+            # Skip the references-only sidecar dir under skills/shippo/
+            if [ -f "${skill_dir}SKILL.md" ]; then
+              echo "Validating $skill_dir"
+              bash scripts/retry.sh 3 npx -y skills-ref@0.1.5 validate "${skill_dir%/}"
+            fi
+          done
+
+      - name: Authenticate ClawHub CLI
+        # PRs from forks on a public repo do NOT receive repo secrets, so
+        # CLAWHUB_TOKEN is unavailable. Skip the ClawHub auth + dry-run on fork
+        # PRs (everything else in this job is offline and still runs); a
+        # maintainer re-runs them from a same-repo branch after review.
+        if: ${{ github.event.pull_request.head.repo.fork != true }}
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$CLAWHUB_TOKEN" ]; then
+            echo "::warning::CLAWHUB_TOKEN secret not set; skipping ClawHub auth (dry-run will be skipped too)."
+            echo "skip_clawhub=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          # Inject token into clawhub CLI config so sync --dry-run can read
+          # registry state (sync requires auth even for dry-run because it
+          # compares local against published versions).
+          mkdir -p "$HOME/Library/Application Support/clawhub" "$HOME/.config/clawhub"
+          # Try both common config locations (CLI picks the right one per platform).
+          REGISTRY="https://clawhub.ai"
+          for cfg_dir in "$HOME/Library/Application Support/clawhub" "$HOME/.config/clawhub"; do
+            cat > "$cfg_dir/config.json" <<EOF
+          {"registry": "$REGISTRY", "token": "$CLAWHUB_TOKEN"}
+          EOF
+          done
+          bash scripts/retry.sh 3 npx -y clawhub@0.19.0 whoami
+
+      - name: Validate ClawHub bundle is publish-ready (clawhub sync --dry-run)
+        # Skipped on fork PRs (no CLAWHUB_TOKEN) and when auth was skipped due to
+        # a missing token; same-repo PRs with the secret present run it fully.
+        if: ${{ github.event.pull_request.head.repo.fork != true && env.skip_clawhub != '1' }}
+        run: |
+          set -e
+          # ClawHub's first-party publish-readiness check. Confirms the bundle
+          # at providers/clawhub/skills/goshippo/ has a valid slug,
+          # metadata.openclaw block, and file count for publishing to ClawHub.
+          # Strictly read-only: --dry-run scans + reports what WOULD publish,
+          # never actually publishes. Token has broader capability but this
+          # step only ever invokes dry-run.
+          bash scripts/retry.sh 3 npx -y clawhub@0.19.0 sync --dry-run --root providers/clawhub/skills
+
+      - name: Verify version fields match across manifests
+        run: |
+          M=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+          P=$(jq -r '.version' providers/claude/plugin/.claude-plugin/plugin.json)
+          N=$(jq -r '.version' package.json)
+          C=$(jq -r '.version' providers/codex/plugin/.codex-plugin/plugin.json)
+          if [ "$M" != "$P" ] || [ "$M" != "$N" ] || [ "$M" != "$C" ]; then
+            echo "::error::Version mismatch: package.json=$N marketplace.json=$M claude-plugin.json=$P codex-plugin.json=$C. Bump all four together. See CONTRIBUTING.md → Version discipline."
+            exit 1
+          fi
+          echo "version match (all 4): $M"
+
+      - name: Verify sync produces no drift (npm test)
+        run: |
+          npm test
+          if ! git diff --quiet; then
+            echo "::error::providers/ has drifted from skills/. Run 'npm test' locally and commit the result. See CONTRIBUTING.md → Setup."
+            git diff --stat
+            exit 1
+          fi
+          echo "npm test: no drift"
+
+      - name: Build validate summary
+        if: ${{ always() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          VERSION=$(jq -r .version package.json 2>/dev/null || echo '?')
+          ENDPOINT=$(jq -r '.mcpServers["shippo-mcp"].url' providers/claude/plugin/.mcp.json 2>/dev/null || echo '?')
+          TOOLS=$(python3 -c "import json;print(len(json.load(open('tools/mcp-catalog.json'))))" 2>/dev/null || echo '?')
+          SKILLS=$(ls -d skills/*/ 2>/dev/null | grep -v 'skills/shippo/' | wc -l | tr -d ' ')
+          if [ "$JOB_STATUS" = "success" ]; then BADGE="### ✅ PASS"; CHECKS="- ✅ All checks passed."; else BADGE="### ❌ FAIL"; CHECKS="- ❌ One or more checks failed, open the run and look for the red step."; fi
+          {
+            echo "## 🛡️ Validate"
+            echo ""
+            echo "$BADGE"
+            echo ""
+            echo "| Fact | Value |"
+            echo "|---|---|"
+            echo "| Version | \`$VERSION\` |"
+            echo "| MCP endpoint | \`$ENDPOINT\` (per-user OAuth) |"
+            echo "| Skills | $SKILLS |"
+            echo "| MCP tools in catalog | $TOOLS |"
+            echo ""
+            echo "**Covered:** direct-edit guard, JSON manifests, token-leak + ClawScan scans, .mcp.json schema (Claude + Codex), OAuth reachability probe, plugin loaders (claude + codex), frontmatter, tool references vs catalog, agentskills.io spec, ClawHub publish dry-run, four-way version match, sync drift."
+            echo ""
+            echo "$CHECKS"
+          } > validate-summary.md
+          cat validate-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post validate summary to the PR
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('validate-summary.md')) return;
+            const marker = '<!-- validate-summary -->';
+            const body = `${marker}\n${fs.readFileSync('validate-summary.md', 'utf8')}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

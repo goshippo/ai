@@ -1,0 +1,112 @@
+name: Skill triggering eval
+
+# Runs on every pull_request so the check always reports (safe to require in
+# branch protection), but only does the expensive model run when skill-relevant
+# files changed; otherwise it reports success without spending API budget.
+# Invokes the real claude CLI (~$0.50-1 per real run against ANTHROPIC_API_KEY).
+# See scripts/eval-skill-triggering.js.
+#
+# Reliability: each prompt is retried on failure (best-of-N via --attempts), so
+# a single run absorbs the LLM run-to-run variance, a wobble-failure is rescued
+# while a genuinely-broken skill fails every attempt. That is what makes this
+# stable enough to be a required check.
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Run only first N prompts (smoke test). Leave empty for full run."
+        required: false
+        default: ""
+      concurrency:
+        description: "Parallel workers (default 4)"
+        required: false
+        default: "4"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect skill-relevant changes
+        id: changed
+        if: github.event_name == 'pull_request'
+        run: |
+          # PRs from forks on a public repo do NOT receive repo secrets, so
+          # ANTHROPIC_API_KEY is unavailable and the model run cannot work.
+          # Skip the eval on fork PRs and report success (this is a required
+          # check); a maintainer re-runs it after review from a same-repo branch.
+          if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::eval skipped for fork PRs (no API key); a maintainer re-runs after review."
+          elif git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD \
+              | grep -qE '^(skills/|tests/skill-triggering\.json|scripts/eval-skill-triggering\.js|\.github/workflows/skill-eval\.yml)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Skill-relevant files changed; running the eval."
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No skill-relevant files changed; skipping the eval and reporting success (required check)."
+          fi
+
+      - name: Set up Node.js
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.run == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install Claude CLI
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.run == 'true'
+        run: npm install -g @anthropic-ai/claude-code@2.1.163
+        # Pinned for reproducibility. If the CLI rename / package path changes, update this step accordingly.
+
+      - name: Run skill-triggering eval
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.run == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -e
+          ARGS=""
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
+          fi
+          if [ -n "${{ github.event.inputs.concurrency }}" ]; then
+            ARGS="$ARGS --concurrency ${{ github.event.inputs.concurrency }}"
+          fi
+          # CI is slower than local; bump the per-prompt timeout from the 30s
+          # default. Pin Opus 4.7 for reproducibility (claude-cli's API-key
+          # default differs from OAuth's). --attempts 3 retries failures only.
+          node scripts/eval-skill-triggering.js \
+            --timeout 120 \
+            --model claude-opus-4-7 \
+            --attempts 3 \
+            $ARGS
+
+      - name: Post eval summary to the PR
+        # Runs even when the eval failed (always()), so the table is posted on
+        # red too. Only when the eval actually ran (eval-summary.md exists).
+        if: ${{ always() && github.event_name == 'pull_request' && steps.changed.outputs.run == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('eval-summary.md')) return;
+            const marker = '<!-- skill-eval-summary -->';
+            const body = `${marker}\n${fs.readFileSync('eval-summary.md', 'utf8')}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Guardrail: block commits that introduce secrets (API keys, tokens, private keys)
+# into this public repo.
+# Override (rarely, with judgment): git commit --no-verify
+set -uo pipefail
+
+SECRET_RE='shippo_live_[A-Za-z0-9]{10}|sk-(ant-)?[A-Za-z0-9_-]{20}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10}'
+
+fail=0
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in .githooks/*|scripts/setup-hooks.sh) continue;; esac   # these legitimately contain the patterns
+  content=$(git show ":$f" 2>/dev/null) || continue
+  if printf '%s' "$content" | grep -nIE "$SECRET_RE" >/dev/null 2>&1; then
+    echo "BLOCKED: possible secret in $f"
+    printf '%s' "$content" | grep -nIE "$SECRET_RE" | head -5
+    fail=1
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+if [ "$fail" = 1 ]; then
+  echo ""
+  echo "This repo is public. Remove the flagged content, or override with: git commit --no-verify"
+  exit 1
+fi
+exit 0

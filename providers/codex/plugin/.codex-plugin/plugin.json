@@ -1,0 +1,38 @@
+{
+  "name": "shippo",
+  "version": "1.4.0",
+  "description": "Ship packages with Shippo. Multi-carrier rate shopping, label generation, package tracking, address validation, customs declarations, and batch processing from CSV files.",
+  "author": {
+    "name": "Shippo",
+    "email": "support@goshippo.com",
+    "url": "https://goshippo.com"
+  },
+  "homepage": "https://docs.goshippo.com",
+  "repository": "https://github.com/goshippo/ai",
+  "license": "MIT",
+  "keywords": [
+    "shipping",
+    "labels",
+    "tracking",
+    "rates",
+    "shippo",
+    "logistics",
+    "customs",
+    "batch",
+    "address-validation"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Shippo",
+    "shortDescription": "Multi-carrier shipping: rates, labels, tracking, address validation.",
+    "longDescription": "Bundles Shippo's shipping skills (rate shopping, label purchase, tracking, address validation, batch shipping, shipping analysis, best-practices, SDK upgrades) and wires the remote Shippo MCP server over Streamable HTTP with per-user Shippo OAuth.",
+    "developerName": "Shippo",
+    "category": "Productivity",
+    "websiteURL": "https://goshippo.com",
+    "defaultPrompt": [
+      "Use Shippo to compare carrier rates and buy the cheapest label.",
+      "Track this Shippo shipment and summarize its delivery status."
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+# Code owners for goshippo/ai
+# Default reviewer for everything in the repo: the Solutions Architects team.
+#
+# NOTE: For GitHub to route review requests here, @goshippo/solutions-architects
+# must have write access to this repo (Settings -> Collaborators and teams).
+* @goshippo/solutions-architects

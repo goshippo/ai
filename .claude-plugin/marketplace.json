@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "shippo",
+  "description": "Shippo's AI distribution marketplace: skills and plugins for building shipping integrations with Claude.",
+  "owner": {
+    "name": "Shippo",
+    "email": "support@goshippo.com"
+  },
+  "plugins": [
+    {
+      "name": "shippo",
+      "source": "./providers/claude/plugin/",
+      "description": "Ship packages with Shippo. Multi-carrier rate shopping, label generation, package tracking, address validation, customs declarations, and batch processing from CSV files.",
+      "version": "1.4.0",
+      "author": {
+        "name": "Shippo",
+        "url": "https://goshippo.com"
+      },
+      "homepage": "https://docs.goshippo.com",
+      "license": "MIT",
+      "category": "productivity"
+    }
+  ]
+}
