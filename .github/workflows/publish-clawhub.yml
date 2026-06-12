@@ -3,34 +3,86 @@ name: Publish ClawHub bundle
 # Publishes the consolidated ClawHub bundle (providers/clawhub/skills/goshippo)
 # to the PUBLIC ClawHub registry at clawhub.ai/shippo/goshippo.
 #
-# Manual trigger only (workflow_dispatch). This is an outward-facing, effectively
-# irreversible action, so it is gated on the full Validate workflow passing first
-# (manifests, scans, .mcp.json schema, the agentskills.io / claude-plugin
-# validators, the four-way version match, and the ClawHub publish-readiness
-# dry-run). The publish job only runs if validate succeeds.
+# Triggers:
+#   - push to main touching the bundle (or this workflow): auto-publishes the
+#     bundle's frontmatter version IF it is not already the registry's latest.
+#     This fires exactly once per version bump; a bundle content change without
+#     a version bump is a no-op (mirrors release.yml's once-per-version gate).
+#   - workflow_dispatch: manual publish. The version input is optional and
+#     defaults to the bundle frontmatter version (must match if provided).
+#
+# The ClawHub bundle version is DECOUPLED from package.json. To cut a ClawHub
+# release, bump `version` in providers/clawhub/skills/goshippo/SKILL.md.template,
+# run `npm test`, and merge to main.
+#
+# Publishing is outward-facing and effectively irreversible, so the publish job
+# only runs after (a) the version is confirmed new AND (b) the full Validate
+# workflow passes (manifests, scans, .mcp.json schema, agentskills.io /
+# claude-plugin validators, four-way version match, ClawHub publish dry-run).
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'providers/clawhub/skills/goshippo/**'
+      - '.github/workflows/publish-clawhub.yml'
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish; must match the bundle SKILL.md frontmatter (e.g. 1.3.1)"
-        required: true
+        description: "Version to publish (defaults to the bundle SKILL.md frontmatter version; must match if provided)"
+        required: false
 
 permissions:
   contents: read
   # The reusable Validate workflow declares pull-requests: write; a called
-  # workflow cannot request more than the caller grants, so grant it here too
-  # (Validate's PR-comment steps no-op on workflow_dispatch, but the grant is
-  # required for the reusable call to start).
+  # workflow cannot request more than the caller grants.
   pull-requests: write
 
 jobs:
-  # The "anthropic validate" gate: reuse the exact Validate workflow.
+  # Decide whether there is a NEW version to publish. The registry is queried
+  # without auth (clawhub inspect is public). Publish only when the bundle
+  # version differs from the registry's current latest.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+      version: ${{ steps.decide.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Decide whether to publish
+        id: decide
+        run: |
+          set -e
+          FM=$(grep -E '^version:' providers/clawhub/skills/goshippo/SKILL.md | head -1 | sed -E 's/^version:[[:space:]]*//')
+          IN="${{ github.event.inputs.version }}"
+          VER="${IN:-$FM}"
+          if [ "$VER" != "$FM" ]; then
+            echo "::error::requested version '$VER' does not match bundle frontmatter version '$FM'. Bump providers/clawhub/skills/goshippo/SKILL.md.template (then npm test)."
+            exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          LATEST=$(npx -y clawhub@0.19.0 inspect goshippo --json 2>/dev/null \
+            | python3 -c "import json,sys; print((json.load(sys.stdin).get('skill',{}).get('tags',{}) or {}).get('latest',''))" 2>/dev/null || echo "")
+          if [ -n "$LATEST" ] && [ "$VER" = "$LATEST" ]; then
+            echo "ClawHub already has shippo/goshippo@$VER (registry latest=$LATEST); nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Will publish shippo/goshippo@$VER (registry latest='${LATEST:-none}')."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The "anthropic validate" gate: reuse the exact Validate workflow. Runs only
+  # when there is a new version to publish.
   validate:
+    needs: gate
+    if: ${{ needs.gate.outputs.publish == 'true' }}
     uses: ./.github/workflows/validate.yml
     secrets: inherit
 
   publish:
-    needs: validate
+    needs: [gate, validate]
+    if: ${{ needs.gate.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,17 +92,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-
-      - name: Guard, input version must match bundle frontmatter
-        run: |
-          set -e
-          FM=$(grep -E '^version:' providers/clawhub/skills/goshippo/SKILL.md | head -1 | sed -E 's/^version:[[:space:]]*//')
-          IN="${{ github.event.inputs.version }}"
-          if [ "$FM" != "$IN" ]; then
-            echo "::error::input version '$IN' does not match bundle frontmatter version '$FM'. Bump providers/clawhub/skills/goshippo/SKILL.md.template (then npm test) or pass the correct version."
-            exit 1
-          fi
-          echo "Publishing goshippo version $FM"
 
       - name: Authenticate ClawHub CLI
         env:
@@ -68,14 +109,16 @@ jobs:
           bash scripts/retry.sh 3 npx -y clawhub@0.19.0 whoami
 
       - name: Publish to ClawHub (shippo/goshippo)
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
         run: |
           set -e
           npx -y clawhub@0.19.0 skill publish providers/clawhub/skills/goshippo \
             --owner shippo \
-            --version "${{ github.event.inputs.version }}" \
-            --changelog "Release ${{ github.event.inputs.version }}: hosted OAuth MCP (mcp.shippo.com), 4-tool meta-API with PascalCase operation names." \
+            --version "$VERSION" \
+            --changelog "Release $VERSION: hosted OAuth MCP (mcp.shippo.com), 4-tool meta-API with PascalCase operation names." \
             --tags latest
-          echo "Published shippo/goshippo@${{ github.event.inputs.version }}."
+          echo "Published shippo/goshippo@$VERSION."
 
       - name: Verify published version
         run: |
