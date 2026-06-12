@@ -703,11 +703,11 @@ ambiguous; do not guess an ID type.
 | **Order number / customer email** | Requires a search step (`ListTransactions` / `ListShipments`) to resolve to objects first. May return several; confirm the right one with the user. |
 
 > **Tracking# → object is a known MCP gap.** There is no direct
-> "find the transaction by tracking number" read. To resolve a label from a
-> tracking number, call `ListTransactions` filtered by `tracking_number` where
-> supported, otherwise page `ListTransactions` and match `tracking_number`
-> yourself. If neither resolves it, build the ticket from `GetTrack` + whatever
-> the user supplied and mark the label fields "Not available."
+> "find the transaction by tracking number" read, and `ListTransactions` has no
+> server-side `tracking_number` filter. To resolve a label from a tracking
+> number, page `ListTransactions` and match `tracking_number` client-side. If
+> that doesn't resolve it, build the ticket from `GetTrack` + whatever the user
+> supplied and mark the label fields "Not available."
 
 > **Carrier token:** `GetTrack` expects a Shippo carrier *token*, not a display
 > name, e.g. `usps`, `ups`, `fedex`, `dhl_express`, `dhl_ecommerce`,
@@ -726,7 +726,7 @@ Core reads (all issue types):
 - `GetTransaction`: label creation time (`object_created`), `tracking_number`, `status`, `rate` reference, `eta`
 - `GetShipment`: `address_from`, `address_to`, requested `shipment_date`, `parcels`, `rates`, `customs_declaration`, `messages`
 - `GetTrack`: current `tracking_status`, full `tracking_history[]`, `eta`
-- `ListTransactions` / `ListShipments`: resolve an order number / email / tracking number to objects
+- `ListTransactions` / `ListShipments`: resolve an order number / email / tracking number to objects (no server-side filter; page and match client-side)
 
 Issue-type-specific reads (Step 4):
 
