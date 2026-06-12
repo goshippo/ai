@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- New `shippo-support-ticket` skill: turns a single shipment identifier (tracking # + carrier, transaction/label ID, shipment ID, or order #/email) into an auto-classified support package — a copy-paste human ticket plus a routing-tagged JSON block for the ticketing pipeline. Read-only (documents and recommends, never issues a write), classifies into one of eight canonical issue types, runs issue-type-specific Shippo MCP lookups, computes a triage timeline, and minimizes PII (object IDs + coarse geography only, no names/street lines). Audience is Shippo support agents. Brings the canonical skill count to 9 (1 Decide / 7 Do / 1 Maintain) and adds a "Support Ticket Builder" section to the ClawHub digest (bundle version 1.3.4 -> 1.4.0). `package.json:version` 1.4.0 -> 1.5.0.
+
 ### Changed
 - ClawHub bundle: declare `license: MIT` in the bundle frontmatter (the repo is MIT, but ClawHub had defaulted the published skill to MIT-0). Bundle version 1.3.3 -> 1.3.4. This republish also refreshes the registry changelog text (the prior publish string had been corrected in CI).
 
