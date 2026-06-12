@@ -6,7 +6,7 @@ This repo is the one-stop shop for building AI-powered shipping integrations wit
 
 It contains:
 
-* **8 Agent Skills**: Workflow knowledge for AI assistants covering rate shopping, address validation, label purchase (with customs), package tracking, batch shipping, shipping cost analysis, integration best practices, and SDK/API upgrades. Authored once and distributed across multiple AI surfaces.
+* **9 Agent Skills**: Workflow knowledge for AI assistants covering rate shopping, address validation, label purchase (with customs), package tracking, batch shipping, shipping cost analysis, support-ticket drafting, integration best practices, and SDK/API upgrades. Authored once and distributed across multiple AI surfaces.
 * **Claude Code Plugin** ([`providers/claude/plugin/`](/providers/claude/plugin)): Install via `--plugin-dir` or the plugin marketplace (`/plugin marketplace add goshippo/ai`).
 * **OpenAI Codex Plugin** ([`providers/codex/plugin/`](/providers/codex/plugin)): Install via the Codex plugin marketplace; bundles the skills plus the OAuth MCP server.
 * **ClawHub Skill** ([`providers/clawhub/skills/goshippo/`](/providers/clawhub/skills/goshippo)): Install via `openclaw skills install goshippo`.

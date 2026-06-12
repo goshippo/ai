@@ -1,6 +1,6 @@
 # Shippo
 
-Ship packages with Shippo from inside Claude Code. This plugin bundles 8 agent skills covering rate-shopping, label generation, package tracking, address validation, customs declarations, batch shipping, and SDK upgrades, plus the workflow knowledge to know which API to call when. Skills teach the assistant *how* to ship; pair with the Shippo MCP server to give the assistant the *tools* to ship.
+Ship packages with Shippo from inside Claude Code. This plugin bundles 9 agent skills covering rate-shopping, label generation, package tracking, address validation, customs declarations, batch shipping, draft support tickets, and SDK upgrades, plus the workflow knowledge to know which API to call when. Skills teach the assistant *how* to ship; pair with the Shippo MCP server to give the assistant the *tools* to ship.
 
 ## Skills
 
@@ -13,6 +13,7 @@ Ship packages with Shippo from inside Claude Code. This plugin bundles 8 agent s
 | `tracking` | Track packages across carriers with status history, substatus codes, and webhooks |
 | `batch-shipping` | Process CSV files of shipments and generate labels in bulk |
 | `shipping-analysis` | Analyze costs, optimize package dimensions, compare carriers, review historical spend |
+| `shippo-support-ticket` | Build an auto-classified, routing-tagged support ticket (human + JSON) for a single shipment or label; read-only, for Shippo support agents |
 | `upgrade-shippo` | Guide for upgrading SDK versions, MCP server updates, breaking-change migration |
 
 ## Usage
