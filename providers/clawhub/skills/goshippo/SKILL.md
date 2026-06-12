@@ -700,14 +700,16 @@ ambiguous; do not guess an ID type.
 | **Tracking number + carrier** | Drives `GetTrack` directly. Best for delivery/lost-package issues. |
 | **Transaction (label) object ID** | Cleanest anchor: label creation time + tracking number + the rate/shipment link, all derivable. |
 | **Shipment object ID** | Gives from/to addresses, requested `shipment_date`, and rates; tracking number comes from the purchased transaction. |
-| **Order number / customer email** | Requires a search step (`ListTransactions` / `ListShipments`) to resolve to objects first. May return several; confirm the right one with the user. |
 
-> **Tracking# → object is a known MCP gap.** There is no direct
-> "find the transaction by tracking number" read, and `ListTransactions` has no
-> server-side `tracking_number` filter. To resolve a label from a tracking
-> number, page `ListTransactions` and match `tracking_number` client-side. If
-> that doesn't resolve it, build the ticket from `GetTrack` + whatever the user
-> supplied and mark the label fields "Not available."
+> **Resolving a tracking number to its label.** First detect the carrier and map
+> it to the Shippo carrier *token* (see the note below), then call `GetTrack`.
+> When the label was purchased through Shippo, the `GetTrack` response carries the
+> transaction `object_id`; use that with `GetTransaction` to pull the label and
+> billing facts. If the label was not bought through Shippo (no transaction comes
+> back), there is nothing to resolve: build the ticket from `GetTrack` plus
+> whatever the user supplied and mark the label fields "Not available."
+> `ListTransactions` has no server-side `tracking_number` filter, so paging it to
+> match by hand is a rarely-useful last resort, not the primary path.
 
 > **Carrier token:** `GetTrack` expects a Shippo carrier *token*, not a display
 > name, e.g. `usps`, `ups`, `fedex`, `dhl_express`, `dhl_ecommerce`,
@@ -723,10 +725,9 @@ this skill; the ticket only documents and recommends.**
 
 Core reads (all issue types):
 
-- `GetTransaction`: label creation time (`object_created`), `tracking_number`, `status`, `rate` reference, `eta`
-- `GetShipment`: `address_from`, `address_to`, requested `shipment_date`, `parcels`, `rates`, `customs_declaration`, `messages`
-- `GetTrack`: current `tracking_status`, full `tracking_history[]`, `eta`
-- `ListTransactions` / `ListShipments`: resolve an order number / email / tracking number to objects (no server-side filter; page and match client-side)
+- `GetTransaction`: label creation time (`object_created`), `tracking_number`, `status`, `rate` reference, `eta`, `metadata` (order/internal reference)
+- `GetShipment`: `address_from`, `address_to`, requested `shipment_date`, `parcels`, `rates`, `customs_declaration`, `extra` (added services + references), `messages`
+- `GetTrack`: current `tracking_status`, full `tracking_history[]`, `eta`, and (for Shippo-purchased labels) the `transaction` object reference
 
 Issue-type-specific reads (Step 4):
 
@@ -746,14 +747,13 @@ nothing more (e.g. a pure tracking-status question with no label on file).
 
 - **Transaction ID** → `GetTransaction`. Read `object_created` (label creation
   time), `tracking_number`, `tracking_url_provider`, `status`, and the `rate`
-  reference. Inspect for a `shipment`/`order` reference to get the shipment ID.
+  reference. Inspect for a `shipment` reference to get the shipment ID.
 - **Shipment ID** → `GetShipment`. Read `address_from`, `address_to`,
   `shipment_date` (the **requested** ship date), `parcels`, `rates`,
   `customs_declaration`. Find the purchased rate/transaction for the tracking #.
-- **Tracking number + carrier** → go straight to `GetTrack`; resolve the label
-  later via the gap workaround above if the user wants the billing/label facts.
-- **Order number / email** → `ListTransactions` or `ListShipments`, confirm the
-  right candidate, then proceed as above.
+- **Tracking number + carrier** → map the carrier to its token and call
+  `GetTrack`. For a Shippo-purchased label the response carries the transaction
+  `object_id`; follow it with `GetTransaction` to get the billing/label facts.
 
 ### Step 3: Pull the core facts
 
@@ -770,6 +770,19 @@ token + tracking number) for `tracking_status`, `tracking_history[]`, and `eta`.
   or the carrier's "accepted/picked up" event). Pre-transit / "label created" /
   "shipment info received" pseudo-events do **not** count; call those out
   separately if present.
+- **Added services and order reference (capture them):** surface the shipment's
+  `extra` block (added services such as `signature_confirmation`, `insurance`,
+  Saturday delivery, QR-code labels) and the customer's own order / internal
+  reference number. That reference can live in two places depending on the
+  integration: the transaction's `metadata` field (the documented home for order
+  numbers) and/or the shipment `extra` reference fields. Capture it from wherever
+  it actually appears, so the agent can tie the ticket back to the order without
+  searching on an order number. The `extra` schema is nuanced and
+  carrier/service-dependent, so **read the actual response fields rather than
+  assuming names**: the `label-purchase` skill documents the common added-service
+  options (signature, insurance, Saturday delivery) and
+  `shippo/references/carrier-guide.md` covers per-carrier availability. Surface
+  only what is actually present; omit the rest.
 - **`messages` noise:** a shipment's `messages` array often carries routine
   "carrier doesn't support option" / "out of service area" entries. These are
   informational. Only surface messages tied to a carrier that actually appears
@@ -870,6 +883,8 @@ SHIPMENT
   Tracking #:      <tracking_number>
   Tracking URL:    <tracking_url_provider>
   Parcel:          <declared dimensions + weight, if available>
+  References:      <order/internal ref from transaction metadata or shipment extra, else "none">
+  Added services:  <signature / insurance / QR code / etc. from extra, else "none">
 
 ADDRESSES (no street-level PII; run GetAddress on an ID for full details)
   From address ID: <address_from object_id>
@@ -930,7 +945,11 @@ WHAT WE NEED FROM SUPPORT
     "shipment_id": "<or null>",
     "tracking_number": "<or null>",
     "carrier_token": "<or null>",
-    "service_level": "<or null>"
+    "service_level": "<or null>",
+    "order_reference": "<order/internal ref from transaction metadata or shipment extra, or null>"
+  },
+  "shipment_extra": {
+    "<only the added-service `extra` fields actually present; e.g. signature_confirmation, insurance, qr_code>": ""
   },
   "addresses": {
     "from": { "address_id": "<or null>", "city": "", "state": "", "zip": "", "country": "" },
@@ -968,8 +987,8 @@ WHAT WE NEED FROM SUPPORT
 
 - **Read-only:** This skill never calls `write` operations. Recommend a refund;
   don't issue one.
-- **Multiple matches** from an order/email/tracking search: list the candidates
-  and ask the user to pick before building the ticket.
+- **Multiple matches** when paging `ListTransactions` as a fallback: list the
+  candidates and ask the user to pick before building the ticket.
 - **Stale objects:** objects older than 390 days aren't returned. If lookups fail
   for that reason, note it and build from whatever the user provided plus tracking.
 - **Classification confidence:** if you classified from sparse wording, set
