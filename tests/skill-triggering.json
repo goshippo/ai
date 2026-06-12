@@ -27,7 +27,8 @@
       "Where is my FedEx shipment 794644746498?",
       "Show me the tracking history for UPS tracking number 1Z999AA10123456784",
       "Set up a webhook to get tracking updates for my shipments via Shippo",
-      "Get the current location and status of tracking number EE123456789US"
+      "Get the current location and status of tracking number EE123456789US",
+      "Just track this package for me, USPS 9405511899223100012345"
     ]
   },
   {
@@ -157,6 +158,26 @@
       "Upgrade my Ubuntu server from 20.04 to 22.04",
       "How do I bump a Python package version in pyproject.toml?",
       "What's new in TypeScript 5.5?"
+    ]
+  },
+  {
+    "skill": "shippo-support-ticket",
+    "should_trigger": true,
+    "prompts": [
+      "Build a Shippo support ticket for a package that's been stuck for 9 days with no tracking movement, USPS 9405511899223100012345",
+      "A customer bought a label but never shipped it and wants a refund, put together a support ticket documenting transaction txn_8f2a1c",
+      "We were charged more than the rate we were quoted on a shipment, write this up as a support ticket for Shippo's billing team",
+      "Package keeps coming back as undeliverable, assemble a support escalation for shipment shp_4d9e21 to send to Shippo support",
+      "This international shipment is stuck in customs, create a routing-tagged Shippo support ticket for the customs queue with the declaration details"
+    ]
+  },
+  {
+    "skill": "shippo-support-ticket",
+    "should_trigger": false,
+    "prompts": [
+      "Write a support ticket for our office WiFi that keeps dropping",
+      "Open a Jira issue for our Q3 sprint planning work",
+      "What's a good recipe for sourdough bread?"
     ]
   }
 ]
