@@ -25,14 +25,14 @@ an internal routing tag. It is not customer-facing copy.
 ## When to use
 
 Use this skill when someone wants to escalate or document a shipping problem and
-asks for a support ticket / message to Shippo support — e.g. "package is stuck,"
+asks for a support ticket / message to Shippo support, e.g. "package is stuck,"
 "label was charged but never shipped," "why was I charged more than the rate I
 saw," "refund this label I never used," "where is this delivery," "the address
 looks wrong," "tracking updates aren't coming through," "can't get rates from
 this carrier." It produces **text + JSON to copy and paste**; it does not open a
 Jira ticket or send Slack/email itself.
 
-## Step 1 — Classify the issue (do this first)
+## Step 1: Classify the issue (do this first)
 
 Pick exactly one **canonical issue type** from the customer's description. The
 issue type drives both the routing tag and which extra lookups you run in Step 4.
@@ -50,7 +50,7 @@ If the wording is ambiguous, ask one clarifying question before building.
 | `other` | anything that doesn't fit above | `queue:general-triage` |
 
 > The routing tags above are **placeholders for Shippo's real support queue
-> names** — confirm the actual queue/label taxonomy and update this table once.
+> names**. Confirm the actual queue/label taxonomy and update this table once.
 > The skill's value is producing a consistent, machine-parseable tag; the exact
 > strings should match your ticketing system.
 
@@ -64,7 +64,7 @@ ambiguous; do not guess an ID type.
 | **Tracking number + carrier** | Drives `GetTrack` directly. Best for delivery/lost-package issues. |
 | **Transaction (label) object ID** | Cleanest anchor: label creation time + tracking number + the rate/shipment link, all derivable. |
 | **Shipment object ID** | Gives from/to addresses, requested `shipment_date`, and rates; tracking number comes from the purchased transaction. |
-| **Order number / customer email** | Requires a search step (`ListTransactions` / `ListShipments`) to resolve to objects first. May return several — confirm the right one with the user. |
+| **Order number / customer email** | Requires a search step (`ListTransactions` / `ListShipments`) to resolve to objects first. May return several; confirm the right one with the user. |
 
 > **Tracking# → object is a known MCP gap.** There is no direct
 > "find the transaction by tracking number" read. To resolve a label from a
@@ -74,7 +74,7 @@ ambiguous; do not guess an ID type.
 > the user supplied and mark the label fields "Not available."
 
 > **Carrier token:** `GetTrack` expects a Shippo carrier *token*, not a display
-> name — e.g. `usps`, `ups`, `fedex`, `dhl_express`, `dhl_ecommerce`,
+> name, e.g. `usps`, `ups`, `fedex`, `dhl_express`, `dhl_ecommerce`,
 > `canada_post`. If you only have a display name (often from a rate's
 > `provider`), map it to the token. If unsure, ask the user for the carrier.
 
@@ -82,27 +82,27 @@ ambiguous; do not guess an ID type.
 
 Discover/confirm with `shippo_list_tools` and `shippo_describe_tool`; execute
 read-only lookups with `shippo_read_execute_tool`. **Everything this skill needs
-is a `read` operation — never call a `write` tool (e.g. `CreateRefund`) from
+is a `read` operation; never call a `write` tool (e.g. `CreateRefund`) from
 this skill; the ticket only documents and recommends.**
 
 Core reads (all issue types):
 
-- `GetTransaction` — label creation time (`object_created`), `tracking_number`, `status`, `rate` reference, `eta`
-- `GetShipment` — `address_from`, `address_to`, requested `shipment_date`, `parcels`, `rates`, `customs_declaration`, `messages`
-- `GetTrack` — current `tracking_status`, full `tracking_history[]`, `eta`
-- `ListTransactions` / `ListShipments` — resolve an order number / email / tracking number to objects
+- `GetTransaction`: label creation time (`object_created`), `tracking_number`, `status`, `rate` reference, `eta`
+- `GetShipment`: `address_from`, `address_to`, requested `shipment_date`, `parcels`, `rates`, `customs_declaration`, `messages`
+- `GetTrack`: current `tracking_status`, full `tracking_history[]`, `eta`
+- `ListTransactions` / `ListShipments`: resolve an order number / email / tracking number to objects
 
 Issue-type-specific reads (Step 4):
 
-- `GetRate` — purchased `amount`, `currency`, `provider`, `servicelevel`, `estimated_days` (billing)
-- `GetParcel` — declared `length/width/height`, `distance_unit`, `weight`, `mass_unit` (billing)
-- `ListRefunds` / `GetRefund` — existing refund object + `status` (refund)
-- `ValidateAddress` / `ValidateAddressByID` — `is_valid`, `messages`, residential flag (address)
-- `GetCustomsDeclaration` / `GetCustomsItem` — `contents_type`, `incoterm`, `eel_pfc`, per-item `tariff_number` (HS code), `value_amount`, `origin_country` (customs)
-- `ListCarrierAccounts` / `GetCarrierAccount` / `GetCarrierRegistrationStatus` — `active`, registration status (carrier-account)
-- `listWebhooks` / `getWebhook` — `url`, `event`, `active` (webhook)
+- `GetRate`: purchased `amount`, `currency`, `provider`, `servicelevel`, `estimated_days` (billing)
+- `GetParcel`: declared `length/width/height`, `distance_unit`, `weight`, `mass_unit` (billing)
+- `ListRefunds` / `GetRefund`: existing refund object + `status` (refund)
+- `ValidateAddress` / `ValidateAddressByID`: `is_valid`, `messages`, residential flag (address)
+- `GetCustomsDeclaration` / `GetCustomsItem`: `contents_type`, `incoterm`, `eel_pfc`, per-item `tariff_number` (HS code), `value_amount`, `origin_country` (customs)
+- `ListCarrierAccounts` / `GetCarrierAccount` / `GetCarrierRegistrationStatus`: `active`, registration status (carrier-account)
+- `listWebhooks` / `getWebhook`: `url`, `event`, `active` (webhook)
 
-## Step 2 — Resolve the anchor object
+## Step 2: Resolve the anchor object
 
 Always work toward having the four core objects: **transaction**, **shipment**,
 **addresses**, and **tracking**. Stop early only when the issue genuinely needs
@@ -119,60 +119,60 @@ nothing more (e.g. a pure tracking-status question with no label on file).
 - **Order number / email** → `ListTransactions` or `ListShipments`, confirm the
   right candidate, then proceed as above.
 
-## Step 3 — Pull the core facts
+## Step 3: Pull the core facts
 
 Pull the shipment (`GetShipment`) for `address_from`, `address_to`,
 `shipment_date` if not already loaded, and tracking (`GetTrack` with carrier
 token + tracking number) for `tracking_status`, `tracking_history[]`, and `eta`.
 
 > From each address object capture only its `object_id` and coarse geography
-> (`city`, `state`, `zip`, `country`) for the ticket — **not** `name`,
+> (`city`, `state`, `zip`, `country`) for the ticket, **not** `name`,
 > `street1`, or `street2` (see PII minimization in guardrails).
 
 - **First carrier scan** = the earliest `tracking_history` event representing
   physical acceptance by the carrier (the first `TRANSIT`/`DELIVERED`-class scan,
   or the carrier's "accepted/picked up" event). Pre-transit / "label created" /
-  "shipment info received" pseudo-events do **not** count — call those out
+  "shipment info received" pseudo-events do **not** count; call those out
   separately if present.
 - **`messages` noise:** a shipment's `messages` array often carries routine
   "carrier doesn't support option" / "out of service area" entries. These are
   informational. Only surface messages tied to a carrier that actually appears
   in `rates`.
-- **Read the actual response fields** — do not assume names. If a field is
+- **Read the actual response fields:** do not assume names. If a field is
   absent, record "Not available" rather than inventing a value.
 
-## Step 4 — Run the issue-type branch
+## Step 4: Run the issue-type branch
 
 After the core facts, run **only** the lookups for the classified issue type and
 fill the matching section of the output. Skip branches that don't apply.
 
-- **`lost_or_delayed`** — no extra reads; the core timeline carries it. Emphasize
+- **`lost_or_delayed`**: no extra reads; the core timeline carries it. Emphasize
   "last scan → now" and "overdue vs ETA."
-- **`unused_label_refund`** — Was the label ever scanned? Re-check `GetTrack`: if
+- **`unused_label_refund`**: Was the label ever scanned? Re-check `GetTrack`: if
   there is a real carrier scan, the label is **used** (not eligible as an unused
-  refund) — say so. Compute **label age** from `object_created` to now. Call
+  refund). Say so. Compute **label age** from `object_created` to now. Call
   `ListRefunds` (and `GetRefund`) to report any existing refund object + its
-  `status`. Do **not** assert a specific eligibility window from memory — state
+  `status`. Do **not** assert a specific eligibility window from memory; state
   the facts (used/unused, age, existing refund) and let the queue apply policy.
-- **`billing_adjustment`** — `GetRate` for the purchased `amount`/`currency`;
+- **`billing_adjustment`**: `GetRate` for the purchased `amount`/`currency`;
   `GetParcel` (or shipment `parcels`) for **declared** dims/weight; compare the
   transaction's charged amount to the quoted rate. Flag the likely cause:
   dimensional-weight reweigh (declared vs billed dims), address-correction
   surcharge, or service upgrade. Report declared-vs-billed as the core evidence.
   Note: the reweigh/adjustment amount and the carrier's *billed* dims may not be
-  exposed by these read ops — if so, record "Not available" rather than inferring.
-- **`address_exception`** — run `ValidateAddress`/`ValidateAddressByID` on
+  exposed by these read ops; if so, record "Not available" rather than inferring.
+- **`address_exception`**: run `ValidateAddress`/`ValidateAddressByID` on
   `address_to`; report `is_valid`, any validation `messages`, and the
   residential/commercial flag. Note whether validation was bypassed at purchase.
-- **`customs_international`** — pull `GetCustomsDeclaration` + each
+- **`customs_international`**: pull `GetCustomsDeclaration` + each
   `GetCustomsItem`. Check completeness: `contents_type`, `incoterm`,
   `eel_pfc`/AES exemption, and per item a `tariff_number` (HS code),
-  `value_amount`, and `origin_country`. Flag missing HS codes / values — the
+  `value_amount`, and `origin_country`. Flag missing HS codes / values, the
   usual cause of customs holds.
-- **`carrier_account`** — `ListCarrierAccounts`, then `GetCarrierAccount` /
+- **`carrier_account`**: `ListCarrierAccounts`, then `GetCarrierAccount` /
   `GetCarrierRegistrationStatus` for the relevant carrier. Report `active` and
   registration status; an incomplete registration is the usual "no rates" cause.
-- **`tracking_webhook`** — `listWebhooks` + `getWebhook`. Report whether an
+- **`tracking_webhook`**: `listWebhooks` + `getWebhook`. Report whether an
   `active` webhook exists for the relevant `track_updated`/tracking event and the
   configured `url`.
 
@@ -180,21 +180,21 @@ fill the matching section of the output. Skip branches that don't apply.
 
 These derived metrics pre-diagnose the issue so support doesn't have to:
 
-- **Label created → first carrier scan** — how long the label sat before entering
+- **Label created → first carrier scan**: how long the label sat before entering
   the network. A large gap is the classic "bought but never shipped" signature.
-- **Requested `shipment_date` → first carrier scan** — picked up on/near intent?
-- **First scan → last scan** — total time in transit so far.
-- **Last scan → now** — days of silence; a long gap signals a stalled/lost parcel.
-- **ETA vs. now** — is it overdue?
+- **Requested `shipment_date` → first carrier scan**: picked up on/near intent?
+- **First scan → last scan**: total time in transit so far.
+- **Last scan → now**: days of silence; a long gap signals a stalled/lost parcel.
+- **ETA vs. now**: is it overdue?
 
 State each as an absolute date/time **and** a duration (e.g. "Label created
-2026-06-01 14:02 UTC; first scan 2026-06-05 09:11 UTC — a 3d 19h gap"). Use UTC
+2026-06-01 14:02 UTC; first scan 2026-06-05 09:11 UTC, a 3d 19h gap"). Use UTC
 and label it. In the JSON block, also emit each gap in whole hours.
 
 ## Output
 
 Emit **both** blocks below, each as its own fenced block. Replace every `<...>`
-placeholder; use "Not available" for anything you could not retrieve — never
+placeholder; use "Not available" for anything you could not retrieve; never
 invent values.
 
 **Provenance (required).** Both blocks carry a generation stamp so support can
@@ -209,22 +209,22 @@ Never alter or omit the stamp, and never present an auto-generated ticket as if
 it were hand-written.
 
 After the blocks, add a short plain-language **triage summary**
-(1–3 sentences) naming the most likely problem based on the classification +
+(1-3 sentences) naming the most likely problem based on the classification +
 timeline, and list any data you could not retrieve.
 
-### Block A — Human ticket (copy-paste)
+### Block A: Human ticket (copy-paste)
 
 ```
-Subject: [<issue_type>] <one-line summary> — tracking <tracking_number>
+Subject: [<issue_type>] <one-line summary>, tracking <tracking_number>
 
 ROUTING
   Issue type:      <canonical issue type>
   Routing tag:     <queue:...>
-  Confidence:      <high | medium | low — note if classified from sparse info>
+  Confidence:      <high | medium | low; note if classified from sparse info>
 
 ISSUE
   Reported by:     <customer name / email, if known>
-  Summary:         <2–3 sentence description in plain language>
+  Summary:         <2-3 sentence description in plain language>
 
 SHIPMENT
   Shipment ID:     <shipment object_id>
@@ -235,7 +235,7 @@ SHIPMENT
   Tracking URL:    <tracking_url_provider>
   Parcel:          <declared dimensions + weight, if available>
 
-ADDRESSES (no street-level PII — run GetAddress on an ID for full details)
+ADDRESSES (no street-level PII; run GetAddress on an ID for full details)
   From address ID: <address_from object_id>
   From region:     <city> <state> <zip> <country>
   To address ID:   <address_to object_id>
@@ -256,7 +256,7 @@ TIMELINE (all times UTC)
   Overdue vs ETA:                 <yes/no + by how much>
 
 ISSUE-SPECIFIC FINDINGS
-  <Only the block for the classified issue type — examples:>
+  <Only the block for the classified issue type; examples:>
   [unused_label_refund]  Label used (scanned)? <yes/no>; Label age: <duration>;
                          Existing refund: <refund object_id + status or "none">
   [billing_adjustment]   Quoted rate: <amount> <ccy>; Charged: <amount> <ccy>;
@@ -276,11 +276,11 @@ WHAT WE NEED FROM SUPPORT
   <the specific ask: locate package / refund label / explain charge / fix
    address / clear customs / complete carrier registration / fix webhook>
 
-— Auto-generated by the "shippo-support-ticket" skill via the Shippo MCP on
-  <generation time UTC>. Facts collected automatically; verify before acting.
+(Auto-generated by the "shippo-support-ticket" skill via the Shippo MCP on
+  <generation time UTC>. Facts collected automatically; verify before acting.)
 ```
 
-### Block B — Structured JSON (for the pipeline)
+### Block B: Structured JSON (for the pipeline)
 
 ```json
 {
@@ -339,11 +339,11 @@ WHAT WE NEED FROM SUPPORT
 - **Classification confidence:** if you classified from sparse wording, set
   confidence `low` and say why, so the queue knows to sanity-check the tag.
 - **PII minimization (required):** Do **not** put recipient/sender **names** or
-  **street lines** (`street1`/`street2`) in the ticket — not in the human block
+  **street lines** (`street1`/`street2`) in the ticket, not in the human block
   and not in the JSON. Reference the `address_from` / `address_to` `object_id`s
   instead; support can run `GetAddress` on an ID to retrieve full details and
-  replicate the issue only when they actually need to. Coarse geography —
-  city, state/province, ZIP/postal, country — **is** retained, since support
+  replicate the issue only when they actually need to. Coarse geography
+  (city, state/province, ZIP/postal, country) **is** retained, since support
   needs it for zone/routing triage. Tracking-history `location` values
   (typically city/state) are fine. Don't pull in unrelated shipments, and don't
   include API tokens or raw object dumps beyond what the templates ask for.
