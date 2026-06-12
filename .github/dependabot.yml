@@ -1,0 +1,29 @@
+# Dependabot: keep GitHub Actions and npm dependencies current + flag known
+# vulnerabilities. The repo has no runtime third-party npm deps today (npm test
+# runs zero-dependency scripts), but the npm ecosystem is included to catch any
+# future additions and to surface advisories. github-actions keeps the pinned
+# action versions (actions/checkout, setup-node, attest-build-provenance, etc.)
+# patched against supply-chain advisories.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
+      - "npm"
