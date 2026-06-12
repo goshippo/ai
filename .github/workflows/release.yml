@@ -29,6 +29,10 @@ on:
 
 permissions:
   contents: write
+  # Build-provenance attestation (auditing): id-token for OIDC signing,
+  # attestations for writing the provenance record to the GitHub attestations API.
+  id-token: write
+  attestations: write
 
 concurrency:
   # One release job at a time; never cancel a run mid-publish.
@@ -75,6 +79,16 @@ jobs:
           npm run build:app-plugin
           echo "Built artifact:"
           ls -la dist/app-plugin/
+
+      - name: Attest build provenance
+        # Auditing: cryptographically binds shippo-plugin.zip to the exact commit
+        # + workflow run that produced it (verifiable with `gh attestation verify
+        # dist/app-plugin/shippo-plugin.zip --repo goshippo/ai`). Generated before
+        # the asset is uploaded so the published artifact is the attested one.
+        if: steps.gate.outputs.release == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/app-plugin/shippo-plugin.zip
 
       - name: Publish GitHub Release
         if: steps.gate.outputs.release == 'true'
