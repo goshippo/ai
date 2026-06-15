@@ -13,11 +13,13 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # Cancel an in-flight Validate when a newer commit lands on the same PR/branch;
-  # the required check only needs to be green on the head commit. Matches the
-  # concurrency groups already used by skillsaw.yml and skill-eval.yml.
+  # Cancel an in-flight Validate when a newer commit lands on the same PR; the
+  # required check only needs to be green on the head commit. Scoped to PRs:
+  # never cancel a push-to-main run, since two main pushes landing seconds apart
+  # would otherwise auto-cancel the earlier one and leave a misleading
+  # "cancelled" Validate on main even though the commit is validated elsewhere.
   group: validate-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
