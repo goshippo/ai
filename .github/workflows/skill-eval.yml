@@ -96,7 +96,7 @@ jobs:
         # Runs even when the eval failed (always()), so the table is posted on
         # red too. Only when the eval actually ran (eval-summary.md exists).
         if: ${{ always() && github.event_name == 'pull_request' && steps.changed.outputs.run == 'true' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
