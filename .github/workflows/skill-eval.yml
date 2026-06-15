@@ -43,11 +43,13 @@ jobs:
         run: |
           # PRs from forks on a public repo do NOT receive repo secrets, so
           # ANTHROPIC_API_KEY is unavailable and the model run cannot work.
-          # Skip the eval on fork PRs and report success (this is a required
-          # check); a maintainer re-runs it after review from a same-repo branch.
-          if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+          # Dependabot PRs run in the same restricted context (GitHub withholds
+          # secrets from the dependabot actor), so they are skipped the same way.
+          # Skip the eval for both and report success (this is a required check);
+          # a maintainer re-runs it after review from a same-repo branch.
+          if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ] || [ "${{ github.event.pull_request.user.login }}" = "dependabot[bot]" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::eval skipped for fork PRs (no API key); a maintainer re-runs after review."
+            echo "::notice::eval skipped for fork/Dependabot PRs (no API key); a maintainer re-runs after review."
           elif git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD \
               | grep -qE '^(skills/|tests/skill-triggering\.json|scripts/eval-skill-triggering\.js|\.github/workflows/skill-eval\.yml)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"

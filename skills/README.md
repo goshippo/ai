@@ -33,9 +33,9 @@ Auto-generated files have inline "DO NOT EDIT" banners that explain themselves:
 
 See [providers/README.md](../providers/README.md) for the full distribution model.
 
-## How the 8 skills are organized
+## How the 9 skills are organized
 
-Skills are grouped by **mode of engagement** (what stage of work the user is at), not by product surface. There are three modes:
+Skills are grouped by **mode of engagement** (what stage of work the user is at), not by product surface. There are three modes (the front door routes to 6 workflow skills plus a support-escalation skill):
 
 ```
 DECIDE, "where do I start?"
@@ -48,6 +48,7 @@ DO, "execute this workflow"
     tracking                    (track packages, webhooks)
     batch-shipping              (CSV → bulk labels + manifests)
     shipping-analysis           (cost analysis, optimization)
+    shippo-support-ticket       (escalate a shipment issue: classified ticket + JSON)
 
 MAINTAIN, "upgrade / migrate"
     upgrade-shippo              (SDK + API version migration)
@@ -68,7 +69,7 @@ The Decide skill (`shippo-best-practices`) is the front door for users who don't
 
 ## In this folder
 
-- **8 skills** organized as 1 Decide / 6 Do / 1 Maintain (above)
+- **9 skills** organized as 1 Decide / 7 Do / 1 Maintain (above)
 - **11 shared reference docs** under `shippo/references/`
 
 See the top-level [README.md](../README.md) for the capabilities table and install instructions, and [CONTRIBUTING.md](../CONTRIBUTING.md) for the full authoring discipline.

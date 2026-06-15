@@ -43,7 +43,7 @@ If `npm test` reports drift after a re-run, something's off, check `git status` 
 
 The ClawHub bundle (`providers/clawhub/skills/goshippo/SKILL.md`) is auto-generated from a hand-curated template + canonical skill bodies. Specifically:
 
-- `providers/clawhub/skills/goshippo/SKILL.md.template` is the **editable** source. It contains hand-curated framing sections (Setup, Error Handling, Security & Data Transparency) and `{{skill:<name>}}` placeholders for the 8 workflow/mode skills.
+- `providers/clawhub/skills/goshippo/SKILL.md.template` is the **editable** source. It contains hand-curated framing sections (Setup, Error Handling, Security & Data Transparency) and `{{skill:<name>}}` placeholders for the 9 workflow/mode skills.
 - `scripts/compose-clawhub-digest.js` (run by `npm run sync` and `npm test`) reads the template and substitutes each `{{skill:<name>}}` placeholder with the body of the corresponding canonical `skills/<name>/SKILL.md` (frontmatter stripped, leading H1 stripped, header levels demoted by one).
 - The generated SKILL.md gets an AUTO-GENERATED banner; do NOT edit it directly.
 
@@ -51,7 +51,7 @@ The ClawHub bundle (`providers/clawhub/skills/goshippo/SKILL.md`) is auto-genera
 
 | Change you want to make | Where to edit |
 |---|---|
-| A workflow body (steps, tables, examples for any of the 8 skills) | Canonical `skills/<name>/SKILL.md`. The change automatically lands in the digest on next `npm test`. |
+| A workflow body (steps, tables, examples for any of the 9 skills) | Canonical `skills/<name>/SKILL.md`. The change automatically lands in the digest on next `npm test`. |
 | The Setup section, Error Handling, Security, or section ordering | The template at `providers/clawhub/skills/goshippo/SKILL.md.template` |
 | A reference doc (carrier-guide, csv-format, customs-guide, tool-reference) | Canonical `skills/shippo/references/<name>.md`. `scripts/build-clawhub-bundle.js` (run by `npm run sync`) syncs the curated subset into the bundle. |
 
