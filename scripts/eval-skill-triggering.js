@@ -63,6 +63,7 @@ const SKILL_NAMES = new Set([
   'shippo-best-practices',
   'upgrade-shippo',
   'shippo-support-ticket',
+  'tracking-map',
 ]);
 
 function parseArgs(argv) {

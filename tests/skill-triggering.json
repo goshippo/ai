@@ -28,7 +28,8 @@
       "Show me the tracking history for UPS tracking number 1Z999AA10123456784",
       "Set up a webhook to get tracking updates for my shipments via Shippo",
       "Get the current location and status of tracking number EE123456789US",
-      "Just track this package for me, USPS 9405511899223100012345"
+      "Just track this package for me, USPS 9405511899223100012345",
+      "Has USPS 9400111899223456789012 been delivered yet?"
     ]
   },
   {
@@ -178,6 +179,26 @@
       "Write a support ticket for our office WiFi that keeps dropping",
       "Open a Jira issue for our Q3 sprint planning work",
       "What's a good recipe for sourdough bread?"
+    ]
+  },
+  {
+    "skill": "tracking-map",
+    "should_trigger": true,
+    "prompts": [
+      "Map the tracking history for USPS 92612903367210541430565958",
+      "Show me on a map where this Evri parcel went: H01M8A0096717992",
+      "Make a clickable map of UPS 1Z999AA10123456784, I want to inspect the scan events for a webhook",
+      "Visualize the route this package took as a map: USPS 9400111899223456789012",
+      "Plot the journey for FedEx 123456789012 on a map"
+    ]
+  },
+  {
+    "skill": "tracking-map",
+    "should_trigger": false,
+    "prompts": [
+      "Draw me a map of the London Underground",
+      "Plot a sine wave in matplotlib",
+      "What's the best route to drive from LA to Las Vegas?"
     ]
   }
 ]

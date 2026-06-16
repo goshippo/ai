@@ -14,6 +14,7 @@ Turn a tracking number into a self-contained, interactive HTML report of the pac
 ## When NOT to use
 
 - "What's the status of this package?" with no visual or investigative intent: use `tracking`.
+- A bare tracking number with no clear signal they want a map: ask first whether they want the interactive map (this skill) or a plain status/details summary (`tracking`), then route accordingly.
 - "Set up / register a tracking webhook": that is a write operation; this skill is read-only.
 - "Write up a support ticket for a stuck package": use `shippo-support-ticket`.
 

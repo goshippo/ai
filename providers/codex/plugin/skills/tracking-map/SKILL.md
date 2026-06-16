@@ -3,13 +3,14 @@ name: tracking-map
 description: >-
   Generate an interactive HTML map + chronological timeline of a package's
   tracking history from a tracking number, using the Shippo MCP GetTrack
-  operation. Use this whenever someone wants to SEE a shipment's journey on a
-  map, "map this tracking number", visualize a parcel's route, build a
-  clickable scan-by-scan tracking view, or inspect tracking events to design
-  webhook triggers, even if they don't say the word "map". Triggers on a bare
-  tracking number plus any visual intent ("show me where this package went",
-  "route for 9261...", "tracking history as a map"). Produces a downloadable
-  self-contained .html file, not customer-facing copy.
+  operation. Use this when someone wants to SEE a shipment's journey: "map this
+  tracking number", "show me where this package went", visualize a parcel's
+  route, build a clickable scan-by-scan map, or inspect scan events on a map to
+  design webhook triggers. If the request is just a tracking number with no clear
+  signal they want a visual map, ask whether they want the interactive map (this
+  skill) or a plain tracking status/details summary (the Tracking workflow) before
+  building. Produces a downloadable self-contained .html file, not customer-facing
+  copy.
 ---
 <!--
   ⚠️  DO NOT EDIT. Auto-generated from skills/tracking-map/SKILL.md by scripts/sync.js
@@ -34,13 +35,22 @@ a browser or when the map cannot load.
 
 ## When to use
 
-Use this when someone wants to **see** a shipment's journey rather than just read
-a status: "map this tracking number", "show me where this package went", "route
-for 9261...", "tracking history as a map", "build me a clickable scan-by-scan
-view", or "I want to inspect the scan events to design a webhook". A bare tracking
-number with any visual or investigative intent should fire this skill. For a plain
-"what's the status of X" with no visual/investigative intent, the Tracking
-workflow is the better fit.
+Use this when someone clearly wants to **see** a shipment's journey rather than
+just read a status: "map this tracking number", "show me where this package went",
+"route for 9261...", "tracking history as a map", "build me a clickable scan-by-scan
+view", or "I want to inspect the scan events to design a webhook".
+
+**Disambiguate a bare tracking number first.** If the user only gives a tracking
+number (or "track this") with no clear signal they want a visual map, do not
+assume. Ask which they want:
+
+- the **interactive map** (this skill: a self-contained HTML route + timeline), or
+- a **plain status/details summary** (the Tracking workflow: a straightforward
+  `GetTrack` lookup presented as a short table, no map).
+
+Only build the map once the user has signaled they want it (either up front or in
+answer to that question). A plain "what's the status of X" with no visual intent is
+the Tracking workflow's job, not this skill's.
 
 ## Step 1: Resolve the carrier token
 
