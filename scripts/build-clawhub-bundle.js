@@ -37,6 +37,17 @@ const BUNDLED_REFERENCES = [
   'tool-reference.md',
 ];
 
+// Per-skill files that must also ship in the bundle so an inlined skill section
+// can load what it references. tracking-map's Tracking Map section renders the
+// interactive report from a bundled template and reads its own references, so
+// those files travel with the bundle. [canonical source, bundle-relative dest].
+const EXTRA_BUNDLED_FILES = [
+  ['skills/tracking-map/assets/report-template.html', 'assets/report-template.html'],
+  ['skills/tracking-map/references/carrier-tokens.md', 'references/carrier-tokens.md'],
+  ['skills/tracking-map/references/geocoding.md', 'references/geocoding.md'],
+  ['skills/tracking-map/references/data-quirks.md', 'references/data-quirks.md'],
+];
+
 function buildYamlBanner(canonicalRelPath) {
   return (
     `# ⚠️  DO NOT EDIT, auto-generated from ${canonicalRelPath} by scripts/${SCRIPT_NAME}\n` +
@@ -80,6 +91,15 @@ async function main() {
     const dest = path.join(BUNDLE_REFS, ref);
     await copyWithBanner(src, dest);
     console.log(`  ✓ ${ref}`);
+  }
+
+  const BUNDLE_ROOT = path.join(ROOT, 'providers/clawhub/skills/goshippo');
+  for (const [relSrc, relDest] of EXTRA_BUNDLED_FILES) {
+    const src = path.join(ROOT, relSrc);
+    const dest = path.join(BUNDLE_ROOT, relDest);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await copyWithBanner(src, dest);
+    console.log(`  ✓ ${relDest}`);
   }
 
   console.log('\nClawHub bundle references updated.');

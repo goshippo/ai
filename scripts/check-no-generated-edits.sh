@@ -200,10 +200,19 @@ for file in $CHANGED_PROVIDERS; do
     fi
   fi
 
-  # (f) ClawHub bundle references/, explained by canonical references or a
-  # new-file add (e.g. a bundle directory rename; check-drift enforces content)
+  # (f) ClawHub bundle references/, explained by a canonical change (shared
+  # references OR a per-skill source the bundle now pulls from, e.g. tracking-map)
+  # or a new-file add (check-drift independently enforces content).
   if echo "$file" | grep -qE '^providers/clawhub/skills/goshippo/references/'; then
-    if canonical_reference_changed || is_added "$file"; then
+    if canonical_reference_changed || canonical_changed || is_added "$file"; then
+      continue
+    fi
+  fi
+
+  # (g) ClawHub bundle assets/ (e.g. tracking-map's report template), explained by
+  # a canonical change or a new-file add.
+  if echo "$file" | grep -qE '^providers/clawhub/skills/goshippo/assets/'; then
+    if canonical_changed || is_added "$file"; then
       continue
     fi
   fi

@@ -12,7 +12,7 @@ Files under `providers/` are auto-generated from canonical sources by `scripts/s
 
 ## Channels
 
-- **`claude/plugin/`**: Claude Code plugin distribution. 9 skills under `skills/` are 1:1 mirrors of canonical, produced by `scripts/sync.js`.
+- **`claude/plugin/`**: Claude Code plugin distribution. 10 skills under `skills/` are 1:1 mirrors of canonical, produced by `scripts/sync.js`.
 - **`codex/plugin/`**: OpenAI Codex plugin. `skills/` is a 1:1 mirror of canonical, produced by the same `scripts/sync.js` target list. `.codex-plugin/plugin.json` + `.mcp.json` + `README.md` (hand-written, editable) carry the manifest, the OAuth MCP wiring, and install instructions. The Codex marketplace catalog is `.agents/plugins/marketplace.json` at the repo root.
 - **`clawhub/skills/goshippo/`**: ClawHub bundle distribution. Single consolidated skill:
   - `SKILL.md.template` (editable) → hand-curated framing + workflow placeholders.
