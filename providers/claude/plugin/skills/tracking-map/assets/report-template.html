@@ -1,0 +1,399 @@
+<!--
+  ⚠️  DO NOT EDIT. Auto-generated from skills/tracking-map/assets/report-template.html by scripts/sync.js
+  Edits here will be overwritten on the next sync.
+  To change this content, edit the canonical source and re-run the sync script.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  tracking-map skill · report template
+  ----------------------------------------------------------------------------
+  The skill renders a report by replacing the placeholder on the `const RAW`
+  line below (a JSON object, raw JSON text, no surrounding quotes; it sits inside
+  backticks). That placeholder is intentionally unique and appears exactly ONCE in
+  this file, so a targeted replace cannot collide with this comment or the sample
+  data.
+
+  REPORT_DATA shape:
+  {
+    "meta": {
+      "carrierName": "USPS", "carrierToken": "usps",
+      "serviceLevel": "Parcel Select" | null,
+      "trackingNumber": "9261...", "trackingNumberPretty": "9261 2903 ...",
+      "originLabel": "Woodmere, NY", "destLabel": "Madison, AL",
+      "statusLabel": "DELIVERED",
+      "eventCount": 21, "firstScan": "05 Mar 21:29", "delivered": "13 Apr 17:58",
+      "transit": "38d 20h", "ownershipNote": "not purchased in this account" | null,
+      "legendNote": "Solid dots = real scans; faded = interpolated."
+    },
+    "origin":      {"lat":40.632,"lng":-73.713,"label":"Woodmere, NY 11598"} | null,
+    "destination": {"lat":34.699,"lng":-86.744,"label":"Madison, AL 35758"}  | null,
+    "banners": [ {"kind":"delay"|"info","title":"...","body":"... (may contain <code>)"} ],
+    "events": [
+      {
+        "lat":40.632,"lng":-73.713,
+        "c":"teal"|"amber"|"green"|"slate"|"red",
+        "status":"TRANSIT","sub":"package_accepted",
+        "date":"2026-03-05T21:29:06Z",
+        "detail":"USPS has picked up the item.",
+        "loc":"Woodmere, NY 11598",
+        "city":"Woodmere","state":"NY","zip":"11598","country":"US",
+        "approx":false,
+        "id":"50be35695b964659acf7951f9d34aae0",
+        "first":true,            // optional: marks first real carrier scan
+        "gap":true,              // optional: this scan resurfaces after a long silence
+        "gapBadge":"END OF 34d GAP"  // optional: label for the gap badge
+      }
+    ]
+  }
+  Order events oldest -> newest, BY status_date (never object_created; see data-quirks.md).
+
+  Map: MapLibre GL JS + OpenFreeMap vector tiles (no API key, free for public use,
+  attribution required). To swap the basemap, change STYLE_URL below (alternates:
+  /positron light, /bright). To use a keyed provider or self-host, point STYLE_URL
+  at that style JSON. See references/geocoding.md and references/data-quirks.md.
+  ----------------------------------------------------------------------------
+-->
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tracking map</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+<style>
+  :root{
+    --ink:#10121a;--ink-2:#181b26;--panel:#f7f6f3;--panel-edge:#e4e1d8;
+    --line:#2a2e3d;--txt:#1d1f27;--txt-dim:#6c6f7c;--paper-dim:#8a8779;
+    --violet:#7b5bff;--violet-soft:#a98cff;
+    --teal:#21c2a8;--amber:#e0a23a;--green:#27b768;--slate:#5b6172;--red:#e0533a;
+    --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{font-family:var(--sans);color:var(--txt);background:var(--ink);-webkit-font-smoothing:antialiased;}
+  .wrap{display:grid;grid-template-columns:minmax(420px,1fr) minmax(360px,540px);height:100vh;}
+  @media (max-width:880px){.wrap{grid-template-columns:1fr;grid-template-rows:46vh 1fr;height:auto;}}
+
+  .map-side{position:relative;background:var(--ink);}
+  #map{position:absolute;inset:0;background:var(--ink);}
+  .maplibregl-popup-content{font-family:var(--sans);font-size:12px;color:var(--txt);padding:8px 10px;border-radius:8px;}
+  .maplibregl-popup-content b{font-weight:600;}
+  .map-head{position:absolute;z-index:600;top:0;left:0;right:0;padding:18px 20px;background:linear-gradient(180deg,rgba(16,18,26,.92),rgba(16,18,26,0));pointer-events:none;}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--violet-soft);}
+  .map-head h1{margin:.25em 0 0;font-size:18px;font-weight:600;color:#fff;letter-spacing:-.01em;}
+  .map-head .sub{font-family:var(--mono);font-size:12px;color:#9aa0b3;margin-top:3px;}
+  .legend{position:absolute;z-index:600;left:16px;bottom:16px;background:rgba(24,27,38,.88);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:11px;color:#c7cad6;backdrop-filter:blur(6px);max-width:250px;}
+  .legend .row{display:flex;align-items:center;gap:8px;margin:4px 0;}
+  .legend .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .legend .note{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);color:#9094a4;line-height:1.45;font-family:var(--mono);font-size:10.5px;}
+
+  /* MapLibre applies its positioning transform to the marker element itself, so
+     the scalable .pin is an INNER child of the marker wrapper (.pin-wrap). */
+  .pin-wrap{line-height:0;}
+  .pin{width:13px;height:13px;border-radius:50%;border:2px solid #10121a;box-shadow:0 0 0 2px rgba(255,255,255,.06);transition:transform .15s ease, box-shadow .15s ease;cursor:pointer;}
+  .pin.approx{opacity:.55;width:9px;height:9px;}
+  .pin.active{transform:scale(1.8);box-shadow:0 0 0 6px rgba(123,91,255,.35);opacity:1;}
+  .anchor{width:18px;height:18px;border:3px solid #fff;}
+
+  .data-side{background:var(--panel);overflow-y:auto;border-left:1px solid #000;}
+  .panel-head{padding:20px 22px 14px;border-bottom:1px solid var(--panel-edge);position:sticky;top:0;background:var(--panel);z-index:5;}
+  .panel-head .eyebrow{color:var(--violet);}
+  .panel-head h2{margin:.3em 0 .1em;font-size:16px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;}
+  .route-line{font-family:var(--mono);font-size:12px;color:var(--txt-dim);}
+  .route-line b{color:var(--txt);font-weight:600;}
+  .meta{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--paper-dim);}
+  .meta span b{color:var(--txt);font-weight:600;}
+  .status-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:600;border-radius:999px;padding:3px 10px;letter-spacing:.04em;}
+  .banner{margin:14px 22px 4px;background:#fff;border:1px solid var(--panel-edge);border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.5;}
+  .banner.delay{border-left:3px solid var(--red);color:#7a4035;} .banner.delay b{color:#b8412e;}
+  .banner.info{border-left:3px solid var(--violet);color:#615e54;} .banner.info b{color:var(--txt);}
+  .banner code{font-family:var(--mono);font-size:11px;background:#efeee9;padding:1px 4px;border-radius:4px;}
+
+  .timeline{padding:8px 0 40px;}
+  .ev{position:relative;display:grid;grid-template-columns:78px 1fr;padding:0 22px;cursor:pointer;}
+  .ev .rail{position:relative;}
+  .ev .rail::before{content:"";position:absolute;left:11px;top:0;bottom:0;width:2px;background:var(--panel-edge);}
+  .ev:first-child .rail::before{top:22px;}
+  .ev:last-child .rail::before{bottom:calc(100% - 22px);}
+  .ev.gap .rail::before{background:repeating-linear-gradient(180deg,var(--red) 0 5px,transparent 5px 11px);}
+  .ev .node{position:absolute;left:5px;top:16px;width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--slate);transition:transform .14s ease;}
+  .ev .body{padding:12px 0 14px;border-bottom:1px solid var(--panel-edge);}
+  .ev:last-child .body{border-bottom:none;}
+  .ev .when{font-family:var(--mono);font-size:11px;color:var(--paper-dim);}
+  .ev .loc{font-family:var(--mono);font-size:11px;color:var(--violet);}
+  .ev .loc.approx{color:var(--paper-dim);}
+  .ev .detail{font-size:13.5px;line-height:1.4;margin:3px 0 6px;color:var(--txt);font-weight:500;}
+  .ev .tags{display:flex;flex-wrap:wrap;gap:6px;}
+  .ev .tag{font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:#ecebe6;color:#5a5e6c;}
+  .ev .tag.status{color:#fff;}
+  .ev:hover{background:#efeee9;}
+  .ev.active{background:#eceaff;}
+  .ev.active .node{transform:scale(1.25);box-shadow:0 0 0 5px rgba(123,91,255,.18);}
+  .ev .raw{display:none;margin-top:8px;background:var(--ink-2);border-radius:8px;padding:10px 12px;overflow:auto;}
+  .ev .raw pre{margin:0;font-family:var(--mono);font-size:11px;line-height:1.5;color:#cdd2e0;white-space:pre;}
+  .ev.open .raw{display:block;}
+  .ev .raw .k{color:var(--violet-soft);} .ev .raw .s{color:var(--teal);}
+  .ev .badge{display:inline-block;margin-left:6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;border-radius:4px;padding:2px 6px;vertical-align:middle;color:#fff;}
+  .ev .badge.first{background:var(--violet);} .ev .badge.gapb{background:var(--red);}
+  .hint{font-family:var(--mono);font-size:10.5px;color:var(--paper-dim);padding:0 22px 14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="map-side">
+    <div id="map"></div>
+    <div class="map-head">
+      <div class="eyebrow" id="h-eyebrow"></div>
+      <h1 id="h-tracking"></h1>
+      <div class="sub" id="h-sub"></div>
+    </div>
+    <div class="legend">
+      <div class="row"><span class="dot" style="background:var(--teal)"></span>Pickup / accepted</div>
+      <div class="row"><span class="dot" style="background:var(--amber)"></span>Facility scan / in transit</div>
+      <div class="row"><span class="dot" style="background:var(--red)"></span>Delay / exception</div>
+      <div class="row"><span class="dot" style="background:var(--green)"></span>Delivered</div>
+      <div class="note" id="legend-note"></div>
+    </div>
+  </div>
+
+  <div class="data-side">
+    <div class="panel-head">
+      <div class="eyebrow">Tracking events · chronological</div>
+      <h2>Scan history <span class="status-chip" id="status-chip"></span></h2>
+      <div class="route-line" id="route-line"></div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div id="banners"></div>
+    <div class="timeline" id="timeline"></div>
+    <div class="hint">Times shown in UTC, oldest -> newest. Click a row to expand the raw event object.</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+/* ---- basemap: OpenFreeMap (no API key, free for public use, attribution required).
+   Swap STYLE_URL for /positron or /bright, or a keyed/self-hosted style JSON. ---- */
+const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
+/* ---- injected data (skill replaces the token; backticks keep it a safe string) ---- */
+const RAW = `{{REPORT_DATA_JSON}}`;
+
+/* tiny built-in sample so opening the raw template still renders something */
+const SAMPLE = {
+  meta:{carrierName:"SAMPLE",carrierToken:"sample",serviceLevel:"Demo",
+    trackingNumber:"SAMPLE000",trackingNumberPretty:"SAMPLE 000",
+    originLabel:"A",destLabel:"B",statusLabel:"DELIVERED",
+    eventCount:2,firstScan:"01 Jan 09:00",delivered:"02 Jan 17:00",transit:"1d 8h",
+    ownershipNote:null,legendNote:"Sample data; the placeholder was not replaced."},
+  origin:{lat:51.5,lng:-0.12,label:"A"},destination:{lat:48.85,lng:2.35,label:"B"},
+  banners:[{kind:"info",title:"Sample:",body:"This is placeholder data."}],
+  events:[
+    {lat:51.5,lng:-0.12,c:"teal",status:"TRANSIT",sub:"package_accepted",date:"2026-01-01T09:00:00Z",detail:"Accepted",loc:"A",city:"A",state:"",zip:"",country:"GB",approx:false,id:"sample1",first:true},
+    {lat:48.85,lng:2.35,c:"green",status:"DELIVERED",sub:"delivered",date:"2026-01-02T17:00:00Z",detail:"Delivered",loc:"B",city:"B",state:"",zip:"",country:"FR",approx:false,id:"sample2"}
+  ]
+};
+
+let DATA; try { DATA = JSON.parse(RAW); } catch(e){ DATA = SAMPLE; }
+
+const COLORS={teal:"#21c2a8",amber:"#e0a23a",green:"#27b768",slate:"#5b6172",red:"#e0533a"};
+const STATUS_BG={PRE_TRANSIT:"#5b6172",TRANSIT:"#e0a23a",DELIVERED:"#27b768",RETURNED:"#e0533a",FAILURE:"#e0533a",UNKNOWN:"#5b6172"};
+
+function esc(t){return String(t==null?"":t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(iso){const d=new Date(iso);if(isNaN(d))return iso||"";const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];const mon=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];const p=n=>String(n).padStart(2,"0");return `${days[d.getUTCDay()]} ${p(d.getUTCDate())} ${mon[d.getUTCMonth()]} · ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;}
+
+/* ---- header ---- */
+const m = DATA.meta;
+document.title = `${m.carrierName} · ${m.trackingNumber}`;
+document.getElementById('h-eyebrow').textContent =
+  [m.carrierName, m.carrierToken, m.serviceLevel].filter(Boolean).join(" · ");
+document.getElementById('h-tracking').textContent = m.trackingNumberPretty || m.trackingNumber;
+document.getElementById('h-sub').textContent =
+  [m.originLabel && m.destLabel ? `${m.originLabel} → ${m.destLabel}` : null, (m.statusLabel||"").toLowerCase()].filter(Boolean).join(" · ");
+document.getElementById('legend-note').textContent = m.legendNote || "";
+
+const chip = document.getElementById('status-chip');
+const sc = STATUS_BG[m.statusLabel] || "#5b6172";
+chip.style.background = hexA(sc,.12); chip.style.color = darken(sc); chip.style.border = `1px solid ${hexA(sc,.4)}`;
+chip.innerHTML = `<span class="dot" style="width:7px;height:7px;border-radius:50%;background:${sc}"></span>${m.statusLabel||""}`;
+
+document.getElementById('route-line').innerHTML =
+  (m.originLabel && m.destLabel) ? `<b>${esc(m.originLabel)}</b> &nbsp;→&nbsp; <b>${esc(m.destLabel)}</b>` : "";
+
+const metaBits = [
+  m.eventCount!=null?`events <b>${m.eventCount}</b>`:null,
+  m.firstScan?`first scan <b>${esc(m.firstScan)}</b>`:null,
+  m.delivered?`delivered <b>${esc(m.delivered)}</b>`:null,
+  m.transit?`transit <b>${esc(m.transit)}</b>`:null,
+  m.ownershipNote?`${esc(m.ownershipNote)}`:null
+].filter(Boolean).map(s=>`<span>${s}</span>`).join("");
+document.getElementById('meta').innerHTML = metaBits;
+
+/* ---- banners ---- */
+document.getElementById('banners').innerHTML = (DATA.banners||[]).map(b=>
+  `<div class="banner ${b.kind==='delay'?'delay':'info'}"><b>${esc(b.title||"")}</b> ${b.body||""}</div>`
+).join("");
+
+/* ---- shared state (declared before timeline + map so both can reference) ---- */
+const events = DATA.events||[];
+const toLngLat = e => [e.lng, e.lat];
+let map = null;
+const markerEls = [];   // inner .pin elements, for hover highlight
+const popups = [];
+let markers = [];
+
+/* ---- timeline (independent of the map; renders even if the map library is
+   blocked or offline, so the report stays useful) ---- */
+function rawObj(e){return {object_id:e.id,status:e.status,substatus:{code:e.sub,action_required:false},status_details:e.detail,status_date:e.date,location:{city:e.city||"",state:e.state||"",zip:e.zip||"",country:e.country||""}};}
+function syntax(obj){let s=JSON.stringify(obj,null,2);s=s.replace(/&/g,'&amp;').replace(/</g,'&lt;');s=s.replace(/"([^"]+)":/g,'"<span class="k">$1</span>":');s=s.replace(/: "([^"]*)"/g,': "<span class="s">$1</span>"');return s;}
+
+const tl=document.getElementById('timeline');
+events.forEach((e,i)=>{
+  const row=document.createElement('div');
+  row.className='ev'+(e.gap?' gap':'');row.dataset.i=i;
+  let badge=e.first?'<span class="badge first">FIRST SCAN</span>':'';
+  if(e.gap) badge+=`<span class="badge gapb">${esc(e.gapBadge||"AFTER GAP")}</span>`;
+  row.innerHTML=`
+    <div class="rail"><div class="node" style="border-color:${COLORS[e.c]||'#5b6172'}"></div></div>
+    <div class="body">
+      <div class="when">${fmt(e.date)}</div>
+      <div class="loc${e.approx?' approx':''}">${esc(e.loc||"")}</div>
+      <div class="detail">${esc(e.detail||"")}${badge}</div>
+      <div class="tags">
+        <span class="tag status" style="background:${STATUS_BG[e.status]||'#5b6172'}">${esc(e.status||"")}</span>
+        <span class="tag">${esc(e.sub||"")}</span>
+        ${e.approx?'<span class="tag">interp. location</span>':''}
+      </div>
+      <div class="raw"><pre>${syntax(rawObj(e))}</pre></div>
+    </div>`;
+  row.addEventListener('mouseenter',()=>hl(i,true));
+  row.addEventListener('mouseleave',()=>hl(i,false));
+  row.addEventListener('click',()=>openRow(i));
+  tl.appendChild(row);
+});
+
+function openRow(i){
+  const row=tl.querySelector(`.ev[data-i="${i}"]`);
+  if(row) row.classList.toggle('open');
+  const e=events[i];
+  if(e && map) map.panTo([e.lng,e.lat],{animate:true});
+}
+
+function hl(i,on){
+  const el=markerEls[i]; if(el) el.classList.toggle('active',on);
+  const row=tl.querySelector(`.ev[data-i="${i}"]`); if(row) row.classList.toggle('active',on);
+  const pop=popups[i], mk=markers[i];
+  if(pop && mk){ if(on && !pop.isOpen()) mk.togglePopup(); else if(!on && pop.isOpen()) mk.togglePopup(); }
+}
+
+/* ---- map (MapLibre GL + OpenFreeMap). Guarded: if the library did not load
+   (offline, or a sandboxed preview that blocks CDN scripts, e.g. an in-app HTML
+   viewer), show a note in the map area and leave the timeline fully usable
+   instead of throwing and aborting the page. ---- */
+if (typeof maplibregl === 'undefined') {
+  const el=document.getElementById('map');
+  if(el) el.innerHTML =
+    '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;padding:24px;color:#9aa0b3;font-family:var(--mono);font-size:12px;line-height:1.6">'
+    + '<div>The map library (MapLibre GL) did not load.</div>'
+    + '<div>Open this file in a web browser with internet access to see the route.</div>'
+    + '<div>The full event timeline is shown alongside.</div></div>';
+} else {
+  const pathPts = events.map(toLngLat);
+
+  map = new maplibregl.Map({
+    container:'map', style:STYLE_URL, center:[-80,39], zoom:3, attributionControl:false
+  });
+  map.addControl(new maplibregl.AttributionControl({compact:true}), 'bottom-right');
+  map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'top-right');
+
+  /* a marker whose positioning transform stays on the wrapper, leaving the inner
+     .pin free to scale on hover */
+  function pinMarker(lng,lat,innerClass,bg){
+    const wrap=document.createElement('div'); wrap.className='pin-wrap';
+    const el=document.createElement('div'); el.className=innerClass; el.style.background=bg;
+    wrap.appendChild(el);
+    const mk=new maplibregl.Marker({element:wrap,anchor:'center'}).setLngLat([lng,lat]).addTo(map);
+    return {mk, el};
+  }
+  /* duration between two ISO timestamps, e.g. "3d 19h" / "5h 12m" / "44m" */
+  function fmtDur(ms){
+    if(!isFinite(ms)||ms<0) return "n/a";
+    const min=Math.round(ms/60000), d=Math.floor(min/1440), h=Math.floor((min%1440)/60), mm=min%60;
+    if(d>0) return `${d}d ${h}h`;
+    if(h>0) return `${h}h ${mm}m`;
+    return `${mm}m`;
+  }
+
+  map.on('load',()=>{
+    /* route as one feature per leg, each carrying its transit time so hovering a
+       leg shows the time in transit between those two scans. The gap leg (into a
+       post-silence scan) is drawn red. A wide transparent "hit" line on top makes
+       the thin route easy to hover. */
+    if(events.length>1){
+      const segs=[];
+      for(let i=1;i<events.length;i++){
+        const a=events[i-1], b=events[i];
+        segs.push({type:'Feature',
+          properties:{gap:b.gap===true, dur:fmtDur((new Date(b.date))-(new Date(a.date))),
+            from:a.loc||a.city||"origin", to:b.loc||b.city||"next scan"},
+          geometry:{type:'LineString',coordinates:[[a.lng,a.lat],[b.lng,b.lat]]}});
+      }
+      map.addSource('segments',{type:'geojson',data:{type:'FeatureCollection',features:segs}});
+      map.addLayer({id:'route-line',type:'line',source:'segments',
+        layout:{'line-cap':'round','line-join':'round'},
+        paint:{'line-color':['case',['get','gap'],'#e0533a','#7b5bff'],
+          'line-width':2,'line-opacity':['case',['get','gap'],0.75,0.5],'line-dasharray':[2,6]}});
+      map.addLayer({id:'route-hit',type:'line',source:'segments',
+        layout:{'line-cap':'round','line-join':'round'},
+        paint:{'line-color':'#000','line-width':16,'line-opacity':0}});
+      const segPop=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:8});
+      map.on('mousemove','route-hit',(e)=>{
+        const f=e.features&&e.features[0]; if(!f) return;
+        map.getCanvas().style.cursor='pointer';
+        segPop.setLngLat(e.lngLat)
+          .setHTML(`<b>${esc(f.properties.dur)}</b> in transit<br>${esc(f.properties.from)} → ${esc(f.properties.to)}`)
+          .addTo(map);
+      });
+      map.on('mouseleave','route-hit',()=>{ map.getCanvas().style.cursor=''; segPop.remove(); });
+    }
+
+    /* anchors */
+    if(DATA.origin){
+      const {mk}=pinMarker(DATA.origin.lng,DATA.origin.lat,'pin anchor','#21c2a8');
+      mk.setPopup(new maplibregl.Popup({offset:14,closeButton:false}).setHTML("<b>Origin</b> · "+esc(DATA.origin.label)));
+    }
+    if(DATA.destination){
+      const {mk}=pinMarker(DATA.destination.lng,DATA.destination.lat,'pin anchor','#27b768');
+      mk.setPopup(new maplibregl.Popup({offset:14,closeButton:false}).setHTML("<b>Destination</b> · "+esc(DATA.destination.label)));
+    }
+
+    /* event dots */
+    markers = events.map((e,i)=>{
+      const {mk,el}=pinMarker(e.lng,e.lat,'pin'+(e.approx?' approx':''),COLORS[e.c]||'#e0a23a');
+      const pop=new maplibregl.Popup({offset:12,closeButton:false,closeOnClick:false})
+        .setHTML(`${fmt(e.date)} · ${esc(e.loc||"")}<br>${esc(e.detail||"")}`);
+      mk.setPopup(pop);
+      el.addEventListener('mouseenter',()=>hl(i,true));
+      el.addEventListener('mouseleave',()=>hl(i,false));
+      el.addEventListener('click',()=>openRow(i));
+      markerEls[i]=el; popups[i]=pop;
+      return mk;
+    });
+
+    /* fit to all real + anchor points */
+    const all = pathPts
+      .concat(DATA.origin?[[DATA.origin.lng,DATA.origin.lat]]:[])
+      .concat(DATA.destination?[[DATA.destination.lng,DATA.destination.lat]]:[]);
+    if(all.length){
+      const b = all.reduce((bb,p)=>bb.extend(p), new maplibregl.LngLatBounds(all[0],all[0]));
+      map.fitBounds(b,{padding:64,duration:0});
+    }
+  });
+}
+
+/* ---- small color helpers for the status chip ---- */
+function hexA(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;}
+function darken(hex){const n=parseInt(hex.slice(1),16);const f=.65;return `rgb(${Math.round(((n>>16)&255)*f)},${Math.round(((n>>8)&255)*f)},${Math.round((n&255)*f)})`;}
+</script>
+</body>
+</html>

@@ -139,6 +139,20 @@ for file in $CHANGED_PROVIDERS; do
     fi
   fi
 
+  # (c2) Claude Code plugin per-skill bundled files (references/, assets/, etc.),
+  # explained by any change in that skill's canonical tree (skills/<name>/) or by
+  # being a newly-added mirror file. Hand-edits to an existing bundled file with
+  # no canonical change still fall through and are caught by check-drift.
+  if echo "$file" | grep -qE '^providers/claude/plugin/skills/[^/]+/'; then
+    name=$(echo "$file" | sed -E 's|^providers/claude/plugin/skills/([^/]+)/.*$|\1|')
+    if [ -n "$name" ] && echo "$CHANGED_ALL" | grep -qE "^skills/${name}/"; then
+      continue
+    fi
+    if is_added "$file"; then
+      continue
+    fi
+  fi
+
   # (b-codex) Codex skills mirror, explained by a matching canonical skill
   # change, or by being a newly-added mirror file (initial channel creation /
   # a new skill). Hand-edits to an EXISTING mirror file (modified, no canonical
@@ -156,6 +170,18 @@ for file in $CHANGED_PROVIDERS; do
   # (c-codex) Codex shared references, explained by canonical references or a new-file add
   if echo "$file" | grep -qE '^providers/codex/plugin/skills/shippo/references/'; then
     if canonical_reference_changed || is_added "$file"; then
+      continue
+    fi
+  fi
+
+  # (c2-codex) Codex per-skill bundled files (references/, assets/, etc.),
+  # explained by any change in that skill's canonical tree or a new-file add.
+  if echo "$file" | grep -qE '^providers/codex/plugin/skills/[^/]+/'; then
+    name=$(echo "$file" | sed -E 's|^providers/codex/plugin/skills/([^/]+)/.*$|\1|')
+    if [ -n "$name" ] && echo "$CHANGED_ALL" | grep -qE "^skills/${name}/"; then
+      continue
+    fi
+    if is_added "$file"; then
       continue
     fi
   fi
