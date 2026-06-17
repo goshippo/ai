@@ -46,6 +46,21 @@ Only build the map once the user has signaled they want it (either up front or i
 answer to that question). A plain "what's the status of X" with no visual intent is
 the Tracking workflow's job, not this skill's.
 
+## Be fast and mechanical
+
+Once the user has confirmed they want the map, this is a **fast, mechanical
+transform**, not an analysis task. The deliverable is the HTML file; the user wants
+the map, not a write-up. So:
+
+- Go straight through: resolve the token, call `GetTrack`, map each event into the
+  data shape, fill the template, save, present the file. Do not pause to deliberate.
+- **Do not analyze or narrate the shipment.** No "what happened to this package"
+  recap, no diagnosing delays, mismatches, or ETAs, no multi-paragraph commentary.
+  The report itself shows the data; the chat reply is one or two lines.
+- Map fields straight across; do not reason about whether a scan is "interesting."
+- Keep optional work optional: banners and gap badges are nice-to-haves, not
+  required. If one is not obvious at a glance, skip it rather than thinking about it.
+
 ## Step 1: Resolve the carrier token
 
 `GetTrack` needs a Shippo carrier **token** (e.g. `usps`, `ups`, `fedex`,
@@ -116,13 +131,17 @@ final/current state. For each event capture: `status_date`, `status`,
 `substatus.code`, `status_details`, `location { city, state, zip, country }`, and
 `object_id`.
 
-- Identify the **first real carrier scan**: the first physical acceptance. Skip
-  `PRE_TRANSIT` "information received" / "label created" pseudo-events.
-- Order and time everything by `status_date`, never `object_created`.
-- Compute the largest gap between consecutive `status_date`s for stall detection.
+- Order everything by `status_date`, never `object_created`.
+- Mark the **first real carrier scan** (`first: true`): the first physical
+  acceptance, skipping `PRE_TRANSIT` "information received" / "label created"
+  pseudo-events.
+- This is a mechanical field-to-field copy. Do not study the history or write
+  conclusions about it. Optionally, if one silence between consecutive scans is
+  obviously the longest, mark that resurfacing scan `gap: true`; if it is not
+  obvious at a glance, skip it. Do not deliberate over stall detection.
 
-See [`references/data-quirks.md`](references/data-quirks.md) for why these rules
-matter (they caused real mistakes when this report was hand-built).
+See [`references/data-quirks.md`](references/data-quirks.md) for the field rules
+(order by `status_date`, `substatus.code` over prose) that must be respected.
 
 ## Step 5: Geocode the events
 
@@ -166,18 +185,19 @@ the saved file path (or a link) and say plainly: "Open this in your web browser 
 view the interactive map." Do **not** paste the full HTML into the reply or emit it
 as an inline code/artifact block: besides being noisy, that is what makes some
 desktop clients auto-open an in-app preview pane, and the map cannot render there
-(those previews block the CDN map library, so it shows blank). The saved file plus
-the text timeline below are the deliverables.
+(those previews block the CDN map library, so it shows blank). The saved file is
+the deliverable.
 
-Then **always also print a short plain-text event timeline in the reply** (oldest
-to newest: UTC timestamp, location or "no location", `status` / `substatus.code`,
-detail). This is the graceful-degradation path: the map needs internet in the
-viewer's browser, and the text timeline keeps the skill useful without one.
+**Keep the chat reply to one or two lines.** The report already contains the map
+and the full timeline, so do not re-dump the events as text or narrate the journey.
+The only short notes worth including:
 
-Surface any data-honesty caveats in the chat reply, not buried in the file:
-interpolated points, an Evri "no coordinates" note, a detected stall, the
-ownership result (not purchased in Shippo, or not associated with this account),
-and any tracking-fee note for an external lookup (see Step 3).
+- the **not-in-Shippo tracking-fee note** (Step 3), if `transaction` was null;
+- a one-clause heads-up if many points are interpolated (e.g. an Evri parcel).
+
+Only produce a plain-text event timeline if the user explicitly asks for one, or if
+no HTML file could be written. Otherwise the file link plus those one-liners is the
+whole reply.
 
 ### Report data shape (`{{REPORT_DATA_JSON}}`)
 
@@ -224,6 +244,11 @@ exception. Set `first: true` on the first real carrier scan. When the route
 resurfaces after a long silence, set `gap: true` and a `gapBadge` on the
 resurfacing scan; the template draws that segment dashed-red. `origin`,
 `destination`, `serviceLevel`, and `ownershipNote` may be `null`.
+
+`banners` is **optional and should usually be empty** (`[]`). It is for at most one
+short, glanceable headline (e.g. a delivered or clear-exception note), never
+analysis. When in doubt, leave it empty: an empty `banners` keeps the report fast
+to produce and clean to read.
 
 The template is **self-contained**: one HTML file, inline CSS/JS, MapLibre GL + the
 OpenFreeMap basemap from CDN. It needs internet **in the viewer's browser** for the
