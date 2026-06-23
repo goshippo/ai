@@ -139,6 +139,20 @@ for file in $CHANGED_PROVIDERS; do
     fi
   fi
 
+  # (c2) Claude Code plugin per-skill bundled files (references/, assets/, etc.),
+  # explained by any change in that skill's canonical tree (skills/<name>/) or by
+  # being a newly-added mirror file. Hand-edits to an existing bundled file with
+  # no canonical change still fall through and are caught by check-drift.
+  if echo "$file" | grep -qE '^providers/claude/plugin/skills/[^/]+/'; then
+    name=$(echo "$file" | sed -E 's|^providers/claude/plugin/skills/([^/]+)/.*$|\1|')
+    if [ -n "$name" ] && echo "$CHANGED_ALL" | grep -qE "^skills/${name}/"; then
+      continue
+    fi
+    if is_added "$file"; then
+      continue
+    fi
+  fi
+
   # (b-codex) Codex skills mirror, explained by a matching canonical skill
   # change, or by being a newly-added mirror file (initial channel creation /
   # a new skill). Hand-edits to an EXISTING mirror file (modified, no canonical
@@ -160,6 +174,18 @@ for file in $CHANGED_PROVIDERS; do
     fi
   fi
 
+  # (c2-codex) Codex per-skill bundled files (references/, assets/, etc.),
+  # explained by any change in that skill's canonical tree or a new-file add.
+  if echo "$file" | grep -qE '^providers/codex/plugin/skills/[^/]+/'; then
+    name=$(echo "$file" | sed -E 's|^providers/codex/plugin/skills/([^/]+)/.*$|\1|')
+    if [ -n "$name" ] && echo "$CHANGED_ALL" | grep -qE "^skills/${name}/"; then
+      continue
+    fi
+    if is_added "$file"; then
+      continue
+    fi
+  fi
+
   # (d) Marketplace/plugin manifest version fields, explained by package.json change
   if echo "$file" | grep -qE '^(\.claude-plugin/marketplace\.json|providers/claude/plugin/\.claude-plugin/plugin\.json)$'; then
     if package_version_changed; then
@@ -174,10 +200,19 @@ for file in $CHANGED_PROVIDERS; do
     fi
   fi
 
-  # (f) ClawHub bundle references/, explained by canonical references or a
-  # new-file add (e.g. a bundle directory rename; check-drift enforces content)
+  # (f) ClawHub bundle references/, explained by a canonical change (shared
+  # references OR a per-skill source the bundle now pulls from, e.g. tracking-map)
+  # or a new-file add (check-drift independently enforces content).
   if echo "$file" | grep -qE '^providers/clawhub/skills/goshippo/references/'; then
-    if canonical_reference_changed || is_added "$file"; then
+    if canonical_reference_changed || canonical_changed || is_added "$file"; then
+      continue
+    fi
+  fi
+
+  # (g) ClawHub bundle assets/ (e.g. tracking-map's report template), explained by
+  # a canonical change or a new-file add.
+  if echo "$file" | grep -qE '^providers/clawhub/skills/goshippo/assets/'; then
+    if canonical_changed || is_added "$file"; then
       continue
     fi
   fi

@@ -5,7 +5,7 @@
  * Reads test cases from tests/skill-triggering.json and, for each prompt,
  * invokes `claude -p --plugin-dir ./providers/claude/plugin
  *   --output-format=stream-json --include-partial-messages "<prompt>"`,
- * parses the streaming JSON output to detect which (if any) of our 9 skills
+ * parses the streaming JSON output to detect which (if any) of our 10 skills
  * was activated, and aggregates pass/fail.
  *
  * Reliability: skill triggering is mildly nondeterministic, so a prompt that
@@ -63,6 +63,7 @@ const SKILL_NAMES = new Set([
   'shippo-best-practices',
   'upgrade-shippo',
   'shippo-support-ticket',
+  'tracking-map',
 ]);
 
 function parseArgs(argv) {
@@ -113,7 +114,7 @@ function loadCases(file) {
 }
 
 /**
- * Detect which of our 9 skills (if any) was activated in a single stream-json line.
+ * Detect which of our 10 skills (if any) was activated in a single stream-json line.
  * The harness accumulates JSON-input deltas across lines per content_block_index,
  * and also handles full tool_use blocks emitted as part of complete assistant messages.
  *

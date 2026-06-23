@@ -6,7 +6,7 @@ This repo is the one-stop shop for building AI-powered shipping integrations wit
 
 It contains:
 
-* **9 Agent Skills**: Workflow knowledge for AI assistants covering rate shopping, address validation, label purchase (with customs), package tracking, batch shipping, shipping cost analysis, support-ticket drafting, integration best practices, and SDK/API upgrades. Authored once and distributed across multiple AI surfaces.
+* **10 Agent Skills**: Workflow knowledge for AI assistants covering rate shopping, address validation, label purchase (with customs), package tracking, interactive tracking maps, batch shipping, shipping cost analysis, support-ticket drafting, integration best practices, and SDK/API upgrades. Authored once and distributed across multiple AI surfaces.
 * **Claude Code Plugin** ([`providers/claude/plugin/`](/providers/claude/plugin)): Install via `--plugin-dir` or the plugin marketplace (`/plugin marketplace add goshippo/ai`).
 * **OpenAI Codex Plugin** ([`providers/codex/plugin/`](/providers/codex/plugin)): Install via the Codex plugin marketplace; bundles the skills plus the OAuth MCP server.
 * **ClawHub Skill** ([`providers/clawhub/skills/goshippo/`](/providers/clawhub/skills/goshippo)): Install via `openclaw skills install goshippo`.
@@ -30,7 +30,7 @@ Agents load skills by **progressive disclosure** in three stages:
 
 [Agent Skills](https://agentskills.io) is an open standard originally developed by Anthropic. The same `SKILL.md` works in Claude Code, Cursor, OpenAI Codex, GitHub Copilot, VS Code, and 30+ other agents.
 
-In this repo, the 9 skills under `skills/` are the **canonical source**. They're propagated into `providers/claude/plugin/skills/` and `providers/codex/plugin/skills/` (1:1 mirrors) and `providers/clawhub/skills/goshippo/` (consolidated digest) automatically by the sync scripts.
+In this repo, the 10 skills under `skills/` are the **canonical source**. They're propagated into `providers/claude/plugin/skills/` and `providers/codex/plugin/skills/` (1:1 mirrors) and `providers/clawhub/skills/goshippo/` (consolidated digest) automatically by the sync scripts.
 
 ## Model Context Protocol (MCP)
 
@@ -46,7 +46,7 @@ Building on OpenAI? See [Using the Shippo MCP from the OpenAI Responses API / Ag
 
 ## Capabilities
 
-The 9 skills in this repo are organized by **mode of engagement**: what the user is doing, not by product surface. The AI assistant matches the user's intent to one of three modes, then loads the right skill.
+The 10 skills in this repo are organized by **mode of engagement**: what the user is doing, not by product surface. The AI assistant matches the user's intent to one of three modes, then loads the right skill.
 
 ### Decide, "where do I start?"
 
@@ -65,6 +65,7 @@ The 9 skills in this repo are organized by **mode of engagement**: what the user
 | `batch-shipping` | Process CSV files of shipments and generate labels in bulk |
 | `shipping-analysis` | Analyze costs, optimize package dimensions, compare carriers, review historical spend |
 | `shippo-support-ticket` | Build an auto-classified, routing-tagged support ticket (human + JSON) for a single shipment or label; read-only, for Shippo support agents |
+| `tracking-map` | Generate an interactive HTML map + chronological timeline of a package's journey from a tracking number (read-only GetTrack) |
 
 ### Maintain, "upgrade or migrate"
 
@@ -74,7 +75,7 @@ The 9 skills in this repo are organized by **mode of engagement**: what the user
 
 A user who already knows the workflow they need ("buy a label", "track this package") jumps straight to a Do skill. A user starting fresh ("I'm building a checkout flow with shipping, where do I start?") hits the Decide skill, which routes them to the right Do skill. Maintenance gets its own skill so production-readiness questions don't compete with workflow content.
 
-The 9 skills lean on **11 shared reference docs** under `skills/shippo/references/` (carriers, customs, CSV format, error reference, etc.). Skills load references on demand, the AI doesn't pull all 11 into context, just the ones a given workflow needs.
+The 10 skills lean on **11 shared reference docs** under `skills/shippo/references/` (carriers, customs, CSV format, error reference, etc.). Skills load references on demand, the AI doesn't pull all 11 into context, just the ones a given workflow needs.
 
 ## Install
 
@@ -137,7 +138,7 @@ The skills teach the assistant *how* to ship across multiple API calls. The MCP 
 
 ## Repo layout
 
-- `skills/`: canonical skill content (9 skills + 11 shared references). **Edit here; everything else flows from here.**
+- `skills/`: canonical skill content (10 skills + 11 shared references). **Edit here; everything else flows from here.**
 - `providers/claude/plugin/`: Claude Code plugin distribution. 1:1 mirror of canonical via `scripts/sync.js`.
 - `providers/codex/plugin/`: OpenAI Codex plugin. `skills/` is a 1:1 mirror of canonical via `scripts/sync.js`; `.codex-plugin/plugin.json` + `.mcp.json` (hand-authored) carry the manifest and the OAuth MCP wiring. Cataloged from `.agents/plugins/marketplace.json` at the repo root.
 - `providers/clawhub/skills/goshippo/`: ClawHub bundle distribution. The `SKILL.md` is auto-generated from `SKILL.md.template` (hand-curated framing) + canonical skill bodies via `scripts/compose-clawhub-digest.js`. References are auto-synced via `scripts/build-clawhub-bundle.js`.
