@@ -13,7 +13,7 @@ description: Track packages across carriers, view tracking history, and set up t
 
 ## Track by Number
 
-1. Determine carrier and tracking number. Carrier must be a lowercase Shippo token (e.g., `usps`, `ups`, `fedex`, `dhl_express`). See `references/carrier-guide.md` for tracking number format hints per carrier. If uncertain, ask the user.
+1. Determine carrier and tracking number. Carrier must be a lowercase Shippo token (e.g., `usps`, `ups`, `fedex`, `dhl_express`). See `shippo/references/carrier-guide.md` for tracking number format hints per carrier. If uncertain, ask the user.
 2. Call `GetTrack` with `carrier` and `tracking_number`.
 3. Key response fields: `tracking_status` (status, status_details, status_date, location), `tracking_history`, `eta`.
 4. Each tracking event includes a `substatus` object with `code`, `text`, and `action_required` (boolean). Include substatus details when presenting tracking history -- these provide more specific information about what happened at each step.
@@ -23,7 +23,7 @@ description: Track packages across carriers, view tracking history, and set up t
 
 ## Status Values
 
-See `references/carrier-guide.md` for carrier-specific status nuances. Standard values:
+See `shippo/references/carrier-guide.md` for carrier-specific status nuances. Standard values:
 
 | Status | Meaning |
 |---|---|

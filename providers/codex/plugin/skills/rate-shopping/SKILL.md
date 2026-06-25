@@ -36,7 +36,7 @@ Map user requests: "overnight" = estimated_days 1, "2-day" = estimated_days <= 2
 
 ## International Rates
 
-Some carriers may return international rates without a customs declaration, but others will not. If no rates are returned, try attaching a customs declaration to the shipment. Some carriers also require a phone number on the destination address for international rate retrieval. Inform the user that customs will be required at label purchase time regardless. See `references/customs-guide.md` for customs details.
+Some carriers may return international rates without a customs declaration, but others will not. If no rates are returned, try attaching a customs declaration to the shipment. Some carriers also require a phone number on the destination address for international rate retrieval. Inform the user that customs will be required at label purchase time regardless. See `shippo/references/customs-guide.md` for customs details.
 
 ---
 

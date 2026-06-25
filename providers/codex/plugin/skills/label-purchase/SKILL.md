@@ -45,11 +45,11 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 
 ## International Label
 
-All domestic steps apply, plus customs handling before shipment creation. See `references/customs-guide.md` for the full customs workflow.
+All domestic steps apply, plus customs handling before shipment creation. See `shippo/references/customs-guide.md` for the full customs workflow.
 
 1. Optionally validate addresses with `ValidateAddress`. Sender must include `email` and `phone`. Ask if missing.
 2. Create customs items: call `CreateCustomsItem` per item (description, quantity, net_weight, mass_unit, value_amount, value_currency, origin_country, tariff_number). Alternatively, you can skip this step and pass inline item objects directly in the declaration (step 3).
-3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See `references/customs-guide.md` for field details.
+3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See `shippo/references/customs-guide.md` for field details.
 4. Call `CreateShipment` with all standard fields plus `customs_declaration` (the declaration object_id).
 5. Present rates, **confirm purchase** (see Purchase Confirmation Gate), then purchase label and return results as in the domestic flow.
 

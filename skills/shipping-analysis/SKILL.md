@@ -18,9 +18,9 @@ description: Analyze shipping costs, compare carriers, optimize package dimensio
 
 1. Confirm the route.
 2. Define dimension profiles to test (or use user-provided ones).
-3. Check `ListCarrierParcelTemplates` and `ListUserParcelTemplates` for flat-rate and saved templates. See `references/rate-shopping-guide.md` for dimensional weight and flat-rate guidance.
+3. Check `ListCarrierParcelTemplates` and `ListUserParcelTemplates` for flat-rate and saved templates. See `shippo/references/rate-shopping-guide.md` for dimensional weight and flat-rate guidance.
 4. Call `CreateShipment` per profile on the same route.
-5. Compare: cheapest rate, carrier options, fastest option per profile. Note where flat-rate templates beat custom dimensions and where dimensional weight causes price jumps. See `references/carrier-guide.md` for carrier-specific weight limits and surcharges.
+5. Compare: cheapest rate, carrier options, fastest option per profile. Note where flat-rate templates beat custom dimensions and where dimensional weight causes price jumps. See `shippo/references/carrier-guide.md` for carrier-specific weight limits and surcharges.
 
 ---
 

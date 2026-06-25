@@ -55,8 +55,9 @@ If the wording is ambiguous, ask one clarifying question before building.
 | `tracking_webhook` | "tracking updates aren't coming through", webhook not firing | `queue:integrations` |
 | `other` | anything that doesn't fit above | `queue:general-triage` |
 
-> The routing tags above are **placeholders for Shippo's real support queue
-> names**. Confirm the actual queue/label taxonomy and update this table once.
+> The routing tags above are a **stable, machine-parseable routing schema**;
+> the receiving team maps each `queue:*` tag to its own ticketing queue, so the
+> exact queue strings are configurable to match your support system.
 > The skill's value is producing a consistent, machine-parseable tag; the exact
 > strings should match your ticketing system.
 

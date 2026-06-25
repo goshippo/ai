@@ -212,7 +212,7 @@ Map user requests: "overnight" = estimated_days 1, "2-day" = estimated_days <= 2
 
 ### International Rates
 
-Some carriers may return international rates without a customs declaration, but others will not. If no rates are returned, try attaching a customs declaration to the shipment. Some carriers also require a phone number on the destination address for international rate retrieval. Inform the user that customs will be required at label purchase time regardless. See `references/customs-guide.md` for customs details.
+Some carriers may return international rates without a customs declaration, but others will not. If no rates are returned, try attaching a customs declaration to the shipment. Some carriers also require a phone number on the destination address for international rate retrieval. Inform the user that customs will be required at label purchase time regardless. See `shippo/references/customs-guide.md` for customs details.
 
 ---
 
@@ -286,11 +286,11 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 
 ### International Label
 
-All domestic steps apply, plus customs handling before shipment creation. See `references/customs-guide.md` for the full customs workflow.
+All domestic steps apply, plus customs handling before shipment creation. See `shippo/references/customs-guide.md` for the full customs workflow.
 
 1. Optionally validate addresses with `ValidateAddress`. Sender must include `email` and `phone`. Ask if missing.
 2. Create customs items: call `CreateCustomsItem` per item (description, quantity, net_weight, mass_unit, value_amount, value_currency, origin_country, tariff_number). Alternatively, you can skip this step and pass inline item objects directly in the declaration (step 3).
-3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See `references/customs-guide.md` for field details.
+3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See `shippo/references/customs-guide.md` for field details.
 4. Call `CreateShipment` with all standard fields plus `customs_declaration` (the declaration object_id).
 5. Present rates, **confirm purchase** (see Purchase Confirmation Gate), then purchase label and return results as in the domestic flow.
 
@@ -396,7 +396,7 @@ Use orders to represent e-commerce fulfillment requests. An order captures the s
 
 ### Track by Number
 
-1. Determine carrier and tracking number. Carrier must be a lowercase Shippo token (e.g., `usps`, `ups`, `fedex`, `dhl_express`). See `references/carrier-guide.md` for tracking number format hints per carrier. If uncertain, ask the user.
+1. Determine carrier and tracking number. Carrier must be a lowercase Shippo token (e.g., `usps`, `ups`, `fedex`, `dhl_express`). See `shippo/references/carrier-guide.md` for tracking number format hints per carrier. If uncertain, ask the user.
 2. Call `GetTrack` with `carrier` and `tracking_number`.
 3. Key response fields: `tracking_status` (status, status_details, status_date, location), `tracking_history`, `eta`.
 4. Each tracking event includes a `substatus` object with `code`, `text`, and `action_required` (boolean). Include substatus details when presenting tracking history -- these provide more specific information about what happened at each step.
@@ -406,7 +406,7 @@ Use orders to represent e-commerce fulfillment requests. An order captures the s
 
 ### Status Values
 
-See `references/carrier-guide.md` for carrier-specific status nuances. Standard values:
+See `shippo/references/carrier-guide.md` for carrier-specific status nuances. Standard values:
 
 | Status | Meaning |
 |---|---|
@@ -467,11 +467,11 @@ Before every call to `PurchaseBatch`, summarize the following and ask the user f
 
 ### CSV Batch Processing
 
-See `references/csv-format.md` for the column specification.
+See `shippo/references/csv-format.md` for the column specification.
 
 1. Read and parse the CSV. Validate required columns are present. Report row count.
 2. Validate each row for non-empty required fields. Report invalid rows with reasons.
-3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See `references/customs-guide.md`. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
+3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See `shippo/references/customs-guide.md`. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
 4. Build the `batch_shipments` array with inline address and parcel objects per row.
 5. Call `CreateBatch` with the array.
 6. Poll `GetBatch` until status changes from `VALIDATING` to `VALID`. See Polling Intervals below.
@@ -547,9 +547,9 @@ Parse CSV -> `CreateCustomsDeclaration` (international rows) -> `CreateBatch` ->
 
 1. Confirm the route.
 2. Define dimension profiles to test (or use user-provided ones).
-3. Check `ListCarrierParcelTemplates` and `ListUserParcelTemplates` for flat-rate and saved templates. See `references/rate-shopping-guide.md` for dimensional weight and flat-rate guidance.
+3. Check `ListCarrierParcelTemplates` and `ListUserParcelTemplates` for flat-rate and saved templates. See `shippo/references/rate-shopping-guide.md` for dimensional weight and flat-rate guidance.
 4. Call `CreateShipment` per profile on the same route.
-5. Compare: cheapest rate, carrier options, fastest option per profile. Note where flat-rate templates beat custom dimensions and where dimensional weight causes price jumps. See `references/carrier-guide.md` for carrier-specific weight limits and surcharges.
+5. Compare: cheapest rate, carrier options, fastest option per profile. Note where flat-rate templates beat custom dimensions and where dimensional weight causes price jumps. See `shippo/references/carrier-guide.md` for carrier-specific weight limits and surcharges.
 
 ---
 
@@ -685,8 +685,9 @@ If the wording is ambiguous, ask one clarifying question before building.
 | `tracking_webhook` | "tracking updates aren't coming through", webhook not firing | `queue:integrations` |
 | `other` | anything that doesn't fit above | `queue:general-triage` |
 
-> The routing tags above are **placeholders for Shippo's real support queue
-> names**. Confirm the actual queue/label taxonomy and update this table once.
+> The routing tags above are a **stable, machine-parseable routing schema**;
+> the receiving team maps each `queue:*` tag to its own ticketing queue, so the
+> exact queue strings are configurable to match your support system.
 > The skill's value is producing a consistent, machine-parseable tag; the exact
 > strings should match your ticketing system.
 

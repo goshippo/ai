@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+- Skills: normalized shared-reference mentions to the canonical `shippo/references/<doc>.md` form (9 stragglers had dropped the `shippo/` prefix), so every reference points at the doc's real location.
+- `shippo/references/tool-reference.md`: reframed as an operation reference invoked through the 4-tool meta-API (the names are operations passed to `shippo_read_execute_tool` / `shippo_write_execute_tool`, not standalone MCP tools), and corrected the `ValidateAddress` entry to document validation by address fields (matching the live server schema) rather than by object ID.
+- Claude plugin README: replaced the placeholder install step with the community-marketplace install flow (`claude plugin install shippo@claude-community`) and moved `--plugin-dir` to a local-development note.
+- `shippo-support-ticket`: reworded the routing-tag note from a "placeholder, update later" TODO into a permanent description of the configurable routing schema.
+
+## 1.5.0
+
 ### Added
 - New `shippo-support-ticket` skill: turns a single shipment identifier (tracking # + carrier, transaction/label ID, shipment ID, or order #/email) into an auto-classified support package — a copy-paste human ticket plus a routing-tagged JSON block for the ticketing pipeline. Read-only (documents and recommends, never issues a write), classifies into one of eight canonical issue types, runs issue-type-specific Shippo MCP lookups, computes a triage timeline, and minimizes PII (object IDs + coarse geography only, no names/street lines). Audience is Shippo support agents. Brings the canonical skill count to 9 (1 Decide / 7 Do / 1 Maintain) and adds a "Support Ticket Builder" section to the ClawHub digest (bundle version 1.3.4 -> 1.4.0). `package.json:version` 1.4.0 -> 1.5.0.
 
