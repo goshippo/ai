@@ -2,10 +2,6 @@
 
 ## [Unreleased]
 
-### Changed
-- ClawHub bundle 1.4.1 -> 1.4.2: set the registry display name to "Shippo" (publish now passes `--name "Shippo"`; it had stayed "Goshippo" from the original slug) and dropped the "(Beta)" prefix from the bundle description.
-- Renamed the ClawHub bundle directory `providers/clawhub/skills/goshippo/` -> `providers/clawhub/skills/shippo/` to match the canonical slug (the `goshippo` name was a leftover from the original slug). Internal path only; the published owner/slug stay `shippo`/`shippo` (set via `--owner`/`--slug`). Updated all path references (build/sync scripts, CI workflows, the no-generated-edits allowlist regexes, docs) and corrected stale `shippo/goshippo` registry URLs and the CONTRIBUTING slug note left from the slug rename.
-
 ### Fixed
 - Skills: normalized shared-reference mentions to the canonical `shippo/references/<doc>.md` form (9 stragglers had dropped the `shippo/` prefix), so every reference points at the doc's real location.
 - `shippo/references/tool-reference.md`: reframed as an operation reference invoked through the 4-tool meta-API (the names are operations passed to `shippo_read_execute_tool` / `shippo_write_execute_tool`, not standalone MCP tools), and corrected the `ValidateAddress` entry to document validation by address fields (matching the live server schema) rather than by object ID.
@@ -13,7 +9,9 @@
 - `shippo-support-ticket`: reworded the routing-tag note from a "placeholder, update later" TODO into a permanent description of the configurable routing schema.
 
 ### Changed
-- ClawHub bundle 1.4.0 -> 1.4.1: republishes the consolidated `shippo/shippo` digest with the above content fixes (the publish gate is version-based, so the bundle version is bumped to ship the corrected content to clawhub.ai/shippo/shippo).
+- ClawHub bundle 1.4.0 -> 1.4.1: republishes the consolidated digest to ship the content fixes listed above under Fixed (the publish gate is version-based, so the bundle version is bumped to ship the corrected content to clawhub.ai/shippo/shippo).
+- ClawHub bundle 1.4.1 -> 1.4.2: set the registry display name to "Shippo" (publish now passes `--name "Shippo"`; it had stayed "Goshippo" from the original slug) and dropped the "(Beta)" prefix from the bundle description.
+- Renamed the ClawHub bundle directory `providers/clawhub/skills/goshippo/` -> `providers/clawhub/skills/shippo/` to match the canonical slug (the `goshippo` name was a leftover from the original slug). Internal path only; the published owner/slug stay `shippo`/`shippo` (set via `--owner`/`--slug`). Updated all path references (build/sync scripts, CI workflows, the no-generated-edits allowlist regexes, docs) and corrected stale `shippo/goshippo` registry URLs and the CONTRIBUTING slug note left from the slug rename.
 
 ## 1.5.0
 
