@@ -62,7 +62,7 @@ jobs:
             exit 1
           fi
           echo "version=$VER" >> "$GITHUB_OUTPUT"
-          LATEST=$(npx -y clawhub@0.19.0 inspect goshippo --json 2>/dev/null \
+          LATEST=$(npx -y clawhub@0.19.0 inspect shippo --json 2>/dev/null \
             | python3 -c "import json,sys; print((json.load(sys.stdin).get('skill',{}).get('tags',{}) or {}).get('latest',''))" 2>/dev/null || echo "")
           if [ -n "$LATEST" ] && [ "$VER" = "$LATEST" ]; then
             echo "ClawHub already has shippo/goshippo@$VER (registry latest=$LATEST); nothing to publish."
@@ -108,19 +108,24 @@ jobs:
           done
           bash scripts/retry.sh 3 npx -y clawhub@0.19.0 whoami
 
-      - name: Publish to ClawHub (shippo/goshippo)
+      - name: Publish to ClawHub (shippo/shippo)
         env:
           VERSION: ${{ needs.gate.outputs.version }}
         run: |
           set -e
+          # Slug is set explicitly to `shippo` (the canonical registry slug).
+          # The bundle directory is named goshippo/ for legacy reasons; the old
+          # `goshippo` slug now redirects to shippo/shippo, so publishing to it
+          # is rejected. --slug shippo targets the existing canonical skill.
           npx -y clawhub@0.19.0 skill publish providers/clawhub/skills/goshippo \
             --owner shippo \
+            --slug shippo \
             --version "$VERSION" \
             --changelog "Release $VERSION: hosted OAuth MCP (mcp.shippo.com), 4-tool meta-API with PascalCase operation names." \
             --tags latest
-          echo "Published shippo/goshippo@$VERSION."
+          echo "Published shippo/shippo@$VERSION."
 
       - name: Verify published version
         run: |
           set -e
-          bash scripts/retry.sh 3 npx -y clawhub@0.19.0 inspect goshippo | head -25
+          bash scripts/retry.sh 3 npx -y clawhub@0.19.0 inspect shippo | head -25
