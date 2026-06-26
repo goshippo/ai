@@ -16,11 +16,11 @@
 
   NOTE: this is the single consolidated digest of all 9 canonical skills (one
   bundle, not a per-skill folder). The ClawHub registry slug is `shippo`
-  (clawhub.ai/shippo/shippo); users install it with `openclaw skills install
-  @shippo/shippo`. The publish workflow also passes `--owner shippo --slug
-  shippo` explicitly. (The
-  registry skill was renamed goshippo -> shippo after the 1.4.0 publish;
-  publishing to the old `goshippo` slug now hits a redirect.)
+  (clawhub.ai/shippo/shippo); users install it with
+  `openclaw skills install @shippo/shippo`. The publish workflow also passes
+  `--owner shippo --slug shippo` explicitly. (The registry skill was renamed
+  goshippo -> shippo after the 1.4.0 publish; publishing to the old `goshippo`
+  slug now hits a redirect.)
 -->
 ---
 name: shippo
