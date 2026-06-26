@@ -389,7 +389,7 @@ jobs:
         run: |
           set -e
           # ClawHub's first-party publish-readiness check. Confirms the bundle
-          # at providers/clawhub/skills/goshippo/ has a valid slug,
+          # at providers/clawhub/skills/shippo/ has a valid slug,
           # metadata.openclaw block, and file count for publishing to ClawHub.
           # Strictly read-only: --dry-run scans + reports what WOULD publish,
           # never actually publishes. Token has broader capability but this

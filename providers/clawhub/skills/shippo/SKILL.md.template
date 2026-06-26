@@ -7,7 +7,7 @@
   Edit canonical skills/<name>/SKILL.md to change workflow body content.
 
   Run `npm run sync` to regenerate the output at
-  providers/clawhub/skills/goshippo/SKILL.md.
+  providers/clawhub/skills/shippo/SKILL.md.
 
   Cross-reference phrasing rule (per CONTRIBUTING.md): canonical content should
   reference other skills by sentence-case section name (e.g., "see Address
@@ -17,10 +17,9 @@
   NOTE: this is the single consolidated digest of all 9 canonical skills (one
   bundle, not a per-skill folder). The ClawHub registry slug is `shippo`
   (clawhub.ai/shippo/shippo); users install it with `openclaw skills install
-  shippo`. The publish workflow passes `--slug shippo` explicitly, so this
-  directory name (`goshippo/`) is just an internal path and does not need to
-  match the slug. (The registry skill was renamed goshippo -> shippo after the
-  1.4.0 publish; publishing to the old `goshippo` slug now hits a redirect.)
+  shippo`. The publish workflow also passes `--slug shippo` explicitly. (The
+  registry skill was renamed goshippo -> shippo after the 1.4.0 publish;
+  publishing to the old `goshippo` slug now hits a redirect.)
 -->
 ---
 name: shippo

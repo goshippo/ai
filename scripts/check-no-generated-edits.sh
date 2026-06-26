@@ -39,8 +39,8 @@ ALLOWED_PATTERNS=(
   '^providers/codex/plugin/\.codex-plugin/plugin\.json$'
   '^providers/claude/plugin/\.mcp\.json$'
   '^providers/claude/plugin/\.claude-plugin/plugin\.json$'
-  '^providers/clawhub/skills/goshippo/SKILL\.md\.template$'
-  '^providers/clawhub/skills/goshippo/\.clawhubignore$'
+  '^providers/clawhub/skills/shippo/SKILL\.md\.template$'
+  '^providers/clawhub/skills/shippo/\.clawhubignore$'
 )
 
 # === Get list of changed files (mode-dependent) ===
@@ -84,7 +84,7 @@ package_version_changed() {
 
 # template_changed: returns 0 if the ClawHub template was edited
 template_changed() {
-  echo "$CHANGED_ALL" | grep -q '^providers/clawhub/skills/goshippo/SKILL\.md\.template$' && return 0 || return 1
+  echo "$CHANGED_ALL" | grep -q '^providers/clawhub/skills/shippo/SKILL\.md\.template$' && return 0 || return 1
 }
 
 # canonical_reference_changed: returns 0 if any shippo/references/ file changed
@@ -168,7 +168,7 @@ for file in $CHANGED_PROVIDERS; do
   fi
 
   # (e) ClawHub bundle SKILL.md, explained by canonical skill OR template change
-  if [ "$file" = 'providers/clawhub/skills/goshippo/SKILL.md' ]; then
+  if [ "$file" = 'providers/clawhub/skills/shippo/SKILL.md' ]; then
     if canonical_changed || template_changed || is_added "$file"; then
       continue
     fi
@@ -176,7 +176,7 @@ for file in $CHANGED_PROVIDERS; do
 
   # (f) ClawHub bundle references/, explained by canonical references or a
   # new-file add (e.g. a bundle directory rename; check-drift enforces content)
-  if echo "$file" | grep -qE '^providers/clawhub/skills/goshippo/references/'; then
+  if echo "$file" | grep -qE '^providers/clawhub/skills/shippo/references/'; then
     if canonical_reference_changed || is_added "$file"; then
       continue
     fi
@@ -205,7 +205,7 @@ echo "  1. Revert the direct edit:  git checkout -- <file>"
 echo "  2. Find the canonical source:"
 echo "       - Skill content       → skills/<name>/SKILL.md  or  skills/<name>/README.md"
 echo "       - Shared reference     → skills/shippo/references/<name>.md"
-echo "       - ClawHub digest       → providers/clawhub/skills/goshippo/SKILL.md.template"
+echo "       - ClawHub digest       → providers/clawhub/skills/shippo/SKILL.md.template"
 echo "       - Plugin version       → package.json (single source of truth)"
 echo "  3. Edit the canonical source, run 'npm test', commit canonical + synced output together."
 echo ""

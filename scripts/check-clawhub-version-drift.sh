@@ -7,7 +7,7 @@
 # frontmatter version differs from the registry latest. So a content change that
 # leaves the version equal to what is already published is a SILENT no-op, the
 # regenerated content strands behind the published version on
-# clawhub.ai/shippo/goshippo. This check mirrors the publish gate's own
+# clawhub.ai/shippo/shippo. This check mirrors the publish gate's own
 # condition (version vs registry latest) and turns the silent strand into a
 # loud, actionable error at PR time.
 #
@@ -16,9 +16,9 @@
 #   scripts/check-clawhub-version-drift.sh              # local: vs origin/main
 set -euo pipefail
 
-BUNDLE_DIR="providers/clawhub/skills/goshippo"
+BUNDLE_DIR="providers/clawhub/skills/shippo"
 BUNDLE_SKILL="$BUNDLE_DIR/SKILL.md"   # generated; carries the published version (matches the publish gate)
-SLUG="shippo"   # canonical ClawHub registry slug (clawhub.ai/shippo/shippo); the bundle dir is named goshippo/ for legacy reasons
+SLUG="shippo"   # canonical ClawHub registry slug (clawhub.ai/shippo/shippo)
 
 BASE="${1:-}"
 if [ -z "$BASE" ]; then

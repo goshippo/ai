@@ -3,7 +3,7 @@
  * build-clawhub-bundle.js, Updates the ClawHub bundle's references
  * from canonical skills/shippo/references/.
  *
- * The consolidated SKILL.md at providers/clawhub/skills/goshippo/SKILL.md
+ * The consolidated SKILL.md at providers/clawhub/skills/shippo/SKILL.md
  * is HAND-CURATED, this script does not regenerate it. Edit it directly
  * when workflow content changes need to land in the ClawHub view.
  *
@@ -23,7 +23,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const SOURCE_REFS = path.join(ROOT, 'skills/shippo/references');
-const BUNDLE_REFS = path.join(ROOT, 'providers/clawhub/skills/goshippo/references');
+const BUNDLE_REFS = path.join(ROOT, 'providers/clawhub/skills/shippo/references');
 
 const SCRIPT_NAME = 'build-clawhub-bundle.js';
 

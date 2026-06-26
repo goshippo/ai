@@ -1,7 +1,7 @@
 name: Publish ClawHub bundle
 
-# Publishes the consolidated ClawHub bundle (providers/clawhub/skills/goshippo)
-# to the PUBLIC ClawHub registry at clawhub.ai/shippo/goshippo.
+# Publishes the consolidated ClawHub bundle (providers/clawhub/skills/shippo)
+# to the PUBLIC ClawHub registry at clawhub.ai/shippo/shippo.
 #
 # Triggers:
 #   - push to main touching the bundle (or this workflow): auto-publishes the
@@ -12,7 +12,7 @@ name: Publish ClawHub bundle
 #     defaults to the bundle frontmatter version (must match if provided).
 #
 # The ClawHub bundle version is DECOUPLED from package.json. To cut a ClawHub
-# release, bump `version` in providers/clawhub/skills/goshippo/SKILL.md.template,
+# release, bump `version` in providers/clawhub/skills/shippo/SKILL.md.template,
 # run `npm test`, and merge to main.
 #
 # Publishing is outward-facing and effectively irreversible, so the publish job
@@ -23,7 +23,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'providers/clawhub/skills/goshippo/**'
+      - 'providers/clawhub/skills/shippo/**'
       - '.github/workflows/publish-clawhub.yml'
   workflow_dispatch:
     inputs:
@@ -54,21 +54,21 @@ jobs:
         id: decide
         run: |
           set -e
-          FM=$(grep -E '^version:' providers/clawhub/skills/goshippo/SKILL.md | head -1 | sed -E 's/^version:[[:space:]]*//')
+          FM=$(grep -E '^version:' providers/clawhub/skills/shippo/SKILL.md | head -1 | sed -E 's/^version:[[:space:]]*//')
           IN="${{ github.event.inputs.version }}"
           VER="${IN:-$FM}"
           if [ "$VER" != "$FM" ]; then
-            echo "::error::requested version '$VER' does not match bundle frontmatter version '$FM'. Bump providers/clawhub/skills/goshippo/SKILL.md.template (then npm test)."
+            echo "::error::requested version '$VER' does not match bundle frontmatter version '$FM'. Bump providers/clawhub/skills/shippo/SKILL.md.template (then npm test)."
             exit 1
           fi
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           LATEST=$(npx -y clawhub@0.19.0 inspect shippo --json 2>/dev/null \
             | python3 -c "import json,sys; print((json.load(sys.stdin).get('skill',{}).get('tags',{}) or {}).get('latest',''))" 2>/dev/null || echo "")
           if [ -n "$LATEST" ] && [ "$VER" = "$LATEST" ]; then
-            echo "ClawHub already has shippo/goshippo@$VER (registry latest=$LATEST); nothing to publish."
+            echo "ClawHub already has shippo/shippo@$VER (registry latest=$LATEST); nothing to publish."
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Will publish shippo/goshippo@$VER (registry latest='${LATEST:-none}')."
+            echo "Will publish shippo/shippo@$VER (registry latest='${LATEST:-none}')."
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -114,10 +114,9 @@ jobs:
         run: |
           set -e
           # Slug is set explicitly to `shippo` (the canonical registry slug).
-          # The bundle directory is named goshippo/ for legacy reasons; the old
-          # `goshippo` slug now redirects to shippo/shippo, so publishing to it
-          # is rejected. --slug shippo targets the existing canonical skill.
-          npx -y clawhub@0.19.0 skill publish providers/clawhub/skills/goshippo \
+          # The skill was previously published as `goshippo`, which now redirects
+          # to shippo/shippo, so --slug shippo targets the existing canonical skill.
+          npx -y clawhub@0.19.0 skill publish providers/clawhub/skills/shippo \
             --owner shippo \
             --slug shippo \
             --name "Shippo" \

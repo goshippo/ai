@@ -4,6 +4,7 @@
 
 ### Changed
 - ClawHub bundle 1.4.1 -> 1.4.2: set the registry display name to "Shippo" (publish now passes `--name "Shippo"`; it had stayed "Goshippo" from the original slug) and dropped the "(Beta)" prefix from the bundle description.
+- Renamed the ClawHub bundle directory `providers/clawhub/skills/goshippo/` -> `providers/clawhub/skills/shippo/` to match the canonical slug (the `goshippo` name was a leftover from the original slug). Internal path only; the published owner/slug stay `shippo`/`shippo` (set via `--owner`/`--slug`). Updated all path references (build/sync scripts, CI workflows, the no-generated-edits allowlist regexes, docs) and corrected stale `shippo/goshippo` registry URLs and the CONTRIBUTING slug note left from the slug rename.
 
 ### Fixed
 - Skills: normalized shared-reference mentions to the canonical `shippo/references/<doc>.md` form (9 stragglers had dropped the `shippo/` prefix), so every reference points at the doc's real location.
@@ -12,7 +13,7 @@
 - `shippo-support-ticket`: reworded the routing-tag note from a "placeholder, update later" TODO into a permanent description of the configurable routing schema.
 
 ### Changed
-- ClawHub bundle 1.4.0 -> 1.4.1: republishes the consolidated `shippo/goshippo` digest with the above content fixes (the publish gate is version-based, so the bundle version is bumped to ship the corrected content to clawhub.ai/shippo/goshippo).
+- ClawHub bundle 1.4.0 -> 1.4.1: republishes the consolidated `shippo/shippo` digest with the above content fixes (the publish gate is version-based, so the bundle version is bumped to ship the corrected content to clawhub.ai/shippo/shippo).
 
 ## 1.5.0
 
@@ -36,7 +37,7 @@
 - `rate-shopping`: note that each rate carries an `object_id` to hand off to the label-purchase flow (no need to re-send address/parcel).
 
 ### Changed
-- Renamed the ClawHub bundle directory `providers/clawhub/skills/shippo-official/` to `providers/clawhub/skills/goshippo/` so the folder matches the published registry slug (`goshippo`) and the SKILL.md frontmatter `name`. Install command is `openclaw skills install goshippo`.
+- Renamed the ClawHub bundle directory `providers/clawhub/skills/shippo-official/` to `providers/clawhub/skills/shippo/` so the folder matches the published registry slug (`goshippo`) and the SKILL.md frontmatter `name`. Install command is `openclaw skills install goshippo`.
 
 ## 1.3.0
 

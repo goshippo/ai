@@ -11,7 +11,7 @@
  * are propagated.
  *
  * The ClawHub bundle's frontmatter version
- * (providers/clawhub/skills/goshippo/SKILL.md.template) is
+ * (providers/clawhub/skills/shippo/SKILL.md.template) is
  * INTENTIONALLY decoupled, ClawHub publish cadence is independent of
  * the Claude Code plugin's version. Bump it manually when releasing
  * to ClawHub.
