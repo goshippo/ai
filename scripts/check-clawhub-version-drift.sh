@@ -18,7 +18,7 @@ set -euo pipefail
 
 BUNDLE_DIR="providers/clawhub/skills/goshippo"
 BUNDLE_SKILL="$BUNDLE_DIR/SKILL.md"   # generated; carries the published version (matches the publish gate)
-SLUG="goshippo"
+SLUG="shippo"   # canonical ClawHub registry slug (clawhub.ai/shippo/shippo); the bundle dir is named goshippo/ for legacy reasons
 
 BASE="${1:-}"
 if [ -z "$BASE" ]; then

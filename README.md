@@ -9,7 +9,7 @@ It contains:
 * **9 Agent Skills**: Workflow knowledge for AI assistants covering rate shopping, address validation, label purchase (with customs), package tracking, batch shipping, shipping cost analysis, support-ticket drafting, integration best practices, and SDK/API upgrades. Authored once and distributed across multiple AI surfaces.
 * **Claude Code Plugin** ([`providers/claude/plugin/`](/providers/claude/plugin)): Install via `--plugin-dir` or the plugin marketplace (`/plugin marketplace add goshippo/ai`).
 * **OpenAI Codex Plugin** ([`providers/codex/plugin/`](/providers/codex/plugin)): Install via the Codex plugin marketplace; bundles the skills plus the OAuth MCP server.
-* **ClawHub Skill** ([`providers/clawhub/skills/goshippo/`](/providers/clawhub/skills/goshippo)): Install via `openclaw skills install goshippo`.
+* **ClawHub Skill** ([`providers/clawhub/skills/goshippo/`](/providers/clawhub/skills/goshippo)): Install via `openclaw skills install shippo`.
 * **Claude apps (claude.ai / Desktop / Cowork)**: The whole plugin is packaged as a single upload-ready ZIP (`shippo-plugin.zip`), attached to every GitHub Release. One upload provisions all the skills.
 
 ## What is a skill?
@@ -111,10 +111,10 @@ See [`providers/codex/plugin/`](/providers/codex/plugin) for details. (To pull j
 ### ClawHub
 
 ```bash
-openclaw skills install goshippo
+openclaw skills install shippo
 ```
 
-(Published as `goshippo` on the [ClawHub registry](https://clawhub.ai/shippo/goshippo).)
+(Published as `shippo` on the [ClawHub registry](https://clawhub.ai/shippo/shippo).)
 
 ### Claude apps (claude.ai / Desktop / Cowork)
 

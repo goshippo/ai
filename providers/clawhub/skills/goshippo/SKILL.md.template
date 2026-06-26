@@ -15,13 +15,15 @@
   read correctly in both per-skill and digest contexts.
 
   NOTE: this is the single consolidated digest of all 9 canonical skills (one
-  bundle, not a per-skill folder). `name: goshippo` matches this directory AND
-  the ClawHub registry slug (clawhub.ai/shippo/goshippo); users install it with
-  `openclaw skills install goshippo`. The published name has been `goshippo`
-  since 1.1.x (see git history).
+  bundle, not a per-skill folder). The ClawHub registry slug is `shippo`
+  (clawhub.ai/shippo/shippo); users install it with `openclaw skills install
+  shippo`. The publish workflow passes `--slug shippo` explicitly, so this
+  directory name (`goshippo/`) is just an internal path and does not need to
+  match the slug. (The registry skill was renamed goshippo -> shippo after the
+  1.4.0 publish; publishing to the old `goshippo` slug now hits a redirect.)
 -->
 ---
-name: goshippo
+name: shippo
 description: "(Beta) A shipping and logistics skill for Shippo. Get multi-carrier rates (USPS, UPS, FedEx, DHL, 30+), buy domestic and international labels with customs, validate addresses, track packages with webhooks, and run bulk CSV batches, plus cost analysis, integration routing, and SDK-upgrade help. Runs through Shippo's hosted MCP with per-user OAuth (sign in once, nothing to copy or store). Uses Shippo's discounted carrier rates."
 version: 1.4.1
 license: MIT
