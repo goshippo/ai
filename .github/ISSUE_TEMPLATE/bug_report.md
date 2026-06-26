@@ -14,7 +14,7 @@ labels: bug
 - [ ] A skill (`skills/<name>/SKILL.md` or a reference)
 - [ ] Claude Code plugin (`providers/claude/plugin/`)
 - [ ] OpenAI Codex plugin (`providers/codex/plugin/`)
-- [ ] ClawHub bundle (`providers/clawhub/skills/goshippo/`)
+- [ ] ClawHub bundle (`providers/clawhub/skills/shippo/`)
 - [ ] A sync/build script (`scripts/`)
 - [ ] Other (describe below)
 

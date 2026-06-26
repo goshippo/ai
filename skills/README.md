@@ -9,7 +9,7 @@ Canonical authoring source for all Shippo agent skills. **Edit here.**
 | A skill's human-facing orientation (what it does, when to use, example prompts) | `skills/<name>/README.md` | `npm test` (the README is mirrored to `providers/claude/plugin/skills/<name>/` for GitHub discoverability of the installed plugin) |
 | A workflow skill (rate-shopping, label-purchase, etc.) | `skills/<name>/SKILL.md` | `npm test` |
 | A shared reference (carrier-guide, customs-guide, etc.) | `skills/shippo/references/<name>.md` | `npm test` |
-| The ClawHub digest's framing, Setup section, Error Handling, Security, or section ordering | `providers/clawhub/skills/goshippo/SKILL.md.template` | `npm test` |
+| The ClawHub digest's framing, Setup section, Error Handling, Security, or section ordering | `providers/clawhub/skills/shippo/SKILL.md.template` | `npm test` |
 | The ClawHub digest's workflow body content | Edit the canonical `skills/<name>/SKILL.md` (changes auto-flow into the digest on next `npm test`) | `npm test` |
 | The Claude Code plugin manifest (version, name, description) | `providers/claude/plugin/.claude-plugin/plugin.json` AND `.claude-plugin/marketplace.json` (keep them in sync, CI checks) | nothing |
 | The MCP server connection (`.mcp.json`) | `providers/claude/plugin/.mcp.json` | nothing, Claude Code reads it directly |
@@ -28,8 +28,8 @@ When a canonical skill references another skill, use sentence-case section names
 Auto-generated files have inline "DO NOT EDIT" banners that explain themselves:
 
 - `providers/claude/plugin/skills/<name>/SKILL.md`: 1:1 mirror of canonical
-- `providers/clawhub/skills/goshippo/SKILL.md`: composed from `SKILL.md.template` + canonical bodies
-- `providers/clawhub/skills/goshippo/references/*.md`: curated subset of canonical references
+- `providers/clawhub/skills/shippo/SKILL.md`: composed from `SKILL.md.template` + canonical bodies
+- `providers/clawhub/skills/shippo/references/*.md`: curated subset of canonical references
 
 See [providers/README.md](../providers/README.md) for the full distribution model.
 

@@ -9,7 +9,7 @@ It contains:
 * **9 Agent Skills**: Workflow knowledge for AI assistants covering rate shopping, address validation, label purchase (with customs), package tracking, batch shipping, shipping cost analysis, support-ticket drafting, integration best practices, and SDK/API upgrades. Authored once and distributed across multiple AI surfaces.
 * **Claude Code Plugin** ([`providers/claude/plugin/`](/providers/claude/plugin)): Install via `--plugin-dir` or the plugin marketplace (`/plugin marketplace add goshippo/ai`).
 * **OpenAI Codex Plugin** ([`providers/codex/plugin/`](/providers/codex/plugin)): Install via the Codex plugin marketplace; bundles the skills plus the OAuth MCP server.
-* **ClawHub Skill** ([`providers/clawhub/skills/goshippo/`](/providers/clawhub/skills/goshippo)): Install via `openclaw skills install shippo`.
+* **ClawHub Skill** ([`providers/clawhub/skills/shippo/`](/providers/clawhub/skills/shippo)): Install via `openclaw skills install @shippo/shippo`.
 * **Claude apps (claude.ai / Desktop / Cowork)**: The whole plugin is packaged as a single upload-ready ZIP (`shippo-plugin.zip`), attached to every GitHub Release. One upload provisions all the skills.
 
 ## What is a skill?
@@ -30,7 +30,7 @@ Agents load skills by **progressive disclosure** in three stages:
 
 [Agent Skills](https://agentskills.io) is an open standard originally developed by Anthropic. The same `SKILL.md` works in Claude Code, Cursor, OpenAI Codex, GitHub Copilot, VS Code, and 30+ other agents.
 
-In this repo, the 9 skills under `skills/` are the **canonical source**. They're propagated into `providers/claude/plugin/skills/` and `providers/codex/plugin/skills/` (1:1 mirrors) and `providers/clawhub/skills/goshippo/` (consolidated digest) automatically by the sync scripts.
+In this repo, the 9 skills under `skills/` are the **canonical source**. They're propagated into `providers/claude/plugin/skills/` and `providers/codex/plugin/skills/` (1:1 mirrors) and `providers/clawhub/skills/shippo/` (consolidated digest) automatically by the sync scripts.
 
 ## Model Context Protocol (MCP)
 
@@ -111,10 +111,10 @@ See [`providers/codex/plugin/`](/providers/codex/plugin) for details. (To pull j
 ### ClawHub
 
 ```bash
-openclaw skills install shippo
+openclaw skills install @shippo/shippo
 ```
 
-(Published as `shippo` on the [ClawHub registry](https://clawhub.ai/shippo/shippo).)
+(Published as `@shippo/shippo` on the [ClawHub registry](https://clawhub.ai/shippo/shippo).)
 
 ### Claude apps (claude.ai / Desktop / Cowork)
 
@@ -140,7 +140,7 @@ The skills teach the assistant *how* to ship across multiple API calls. The MCP 
 - `skills/`: canonical skill content (9 skills + 11 shared references). **Edit here; everything else flows from here.**
 - `providers/claude/plugin/`: Claude Code plugin distribution. 1:1 mirror of canonical via `scripts/sync.js`.
 - `providers/codex/plugin/`: OpenAI Codex plugin. `skills/` is a 1:1 mirror of canonical via `scripts/sync.js`; `.codex-plugin/plugin.json` + `.mcp.json` (hand-authored) carry the manifest and the OAuth MCP wiring. Cataloged from `.agents/plugins/marketplace.json` at the repo root.
-- `providers/clawhub/skills/goshippo/`: ClawHub bundle distribution. The `SKILL.md` is auto-generated from `SKILL.md.template` (hand-curated framing) + canonical skill bodies via `scripts/compose-clawhub-digest.js`. References are auto-synced via `scripts/build-clawhub-bundle.js`.
+- `providers/clawhub/skills/shippo/`: ClawHub bundle distribution. The `SKILL.md` is auto-generated from `SKILL.md.template` (hand-curated framing) + canonical skill bodies via `scripts/compose-clawhub-digest.js`. References are auto-synced via `scripts/build-clawhub-bundle.js`.
 - `dist/app-plugin/`: the single `shippo-plugin.zip` for the Claude apps, built from `providers/claude/plugin/` by `scripts/build-app-plugin.js` (not committed; produced on demand and on release).
 - `scripts/`: sync, compose, and build helpers.
 
@@ -149,7 +149,7 @@ The skills teach the assistant *how* to ship across multiple API calls. The MCP 
 ```bash
 # 1. Edit canonical content
 vim skills/<skill-name>/SKILL.md
-# (or skills/shippo/references/<name>.md, or providers/clawhub/skills/goshippo/SKILL.md.template
+# (or skills/shippo/references/<name>.md, or providers/clawhub/skills/shippo/SKILL.md.template
 #  if you're changing ClawHub-only framing)
 
 # 2. Sync + verify (one command)
@@ -164,7 +164,7 @@ git add -A && git commit -m "..."
 ### Preview your edit
 
 - **Claude Code:** run `claude --plugin-dir ./providers/claude/plugin` from the repo root to launch Claude Code with the local plugin loaded. Edits to `skills/<name>/SKILL.md` are reflected immediately. Skills are namespaced under `/shippo:` (e.g., `/shippo:rate-shopping`).
-- **ClawHub digest:** after `npm test` runs, the rendered output lives at `providers/clawhub/skills/goshippo/SKILL.md`: read it directly to see what ClawHub-installed users will get. There's no local-server preview today.
+- **ClawHub digest:** after `npm test` runs, the rendered output lives at `providers/clawhub/skills/shippo/SKILL.md`: read it directly to see what ClawHub-installed users will get. There's no local-server preview today.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full authoring discipline, including the version-bump rules and the cross-reference phrasing rule for skill content.
 

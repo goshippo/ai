@@ -1,7 +1,7 @@
 ---
 name: shippo
-description: "(Beta) A shipping and logistics skill for Shippo. Get multi-carrier rates (USPS, UPS, FedEx, DHL, 30+), buy domestic and international labels with customs, validate addresses, track packages with webhooks, and run bulk CSV batches, plus cost analysis, integration routing, and SDK-upgrade help. Runs through Shippo's hosted MCP with per-user OAuth (sign in once, nothing to copy or store). Uses Shippo's discounted carrier rates."
-version: 1.4.1
+description: "A shipping and logistics skill for Shippo. Get multi-carrier rates (USPS, UPS, FedEx, DHL, 30+), buy domestic and international labels with customs, validate addresses, track packages with webhooks, and run bulk CSV batches, plus cost analysis, integration routing, and SDK-upgrade help. Runs through Shippo's hosted MCP with per-user OAuth (sign in once, nothing to copy or store). Uses Shippo's discounted carrier rates."
+version: 1.4.2
 license: MIT
 metadata:
   openclaw:
