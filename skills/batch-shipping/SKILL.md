@@ -25,11 +25,11 @@ Before every call to `PurchaseBatch`, summarize the following and ask the user f
 
 ## CSV Batch Processing
 
-See `references/csv-format.md` for the column specification.
+See `shippo/references/csv-format.md` for the column specification.
 
 1. Read and parse the CSV. Validate required columns are present. Report row count.
 2. Validate each row for non-empty required fields. Report invalid rows with reasons.
-3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See `references/customs-guide.md`. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
+3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See `shippo/references/customs-guide.md`. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
 4. Build the `batch_shipments` array with inline address and parcel objects per row.
 5. Call `CreateBatch` with the array.
 6. Poll `GetBatch` until status changes from `VALIDATING` to `VALID`. See Polling Intervals below.

@@ -34,11 +34,18 @@ The plugin's `.mcp.json` points at the hosted Shippo MCP server at `https://mcp.
 
 ### 1. Install the plugin
 
-Install via `--plugin-dir` or the plugin marketplace.
+Add the community marketplace, then install:
+
+```
+claude plugin marketplace add anthropics/claude-plugins-community
+claude plugin install shippo@claude-community
+```
+
+For local development against a checkout, point Claude Code at the plugin directory instead: `claude --plugin-dir providers/claude/plugin`.
 
 ### 2. Authorize Shippo
 
-On first use, run `/mcp` in Claude Code, select the `shippo-mcp` server, and complete the Shippo sign-in in your browser. Claude Code stores the OAuth token and refreshes it automatically, you authorize once.
+On first use, run `/mcp` in Claude Code, select the `shippo-mcp` server, and complete the Shippo sign-in in your browser (the sign-in uses your Shippo account via the goshippo.com OAuth issuer). Claude Code stores the OAuth token and refreshes it automatically. You authorize once.
 
 ### 3. Account and charges
 

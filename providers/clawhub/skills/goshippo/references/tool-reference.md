@@ -4,9 +4,11 @@
   To change this content, edit the canonical source and re-run the sync script.
 -->
 
-# Shippo MCP Tool Reference
+# Shippo MCP Operation Reference
 
-Complete list of MCP tools provided by the Shippo server, grouped by category. Includes required/optional parameters, data types, and async behavior.
+Reference for the Shippo operations callable through the hosted MCP server, grouped by category. Includes required/optional parameters, data types, and async behavior.
+
+**How these are invoked:** the server exposes a 4-tool meta-API (`shippo_list_tools`, `shippo_describe_tool`, `shippo_read_execute_tool`, `shippo_write_execute_tool`). The names below (e.g. `CreateShipment`, `ValidateAddress`, `GetTrack`) are operation names you pass to `shippo_read_execute_tool` (reads) or `shippo_write_execute_tool` (writes), not standalone MCP tools. See the `shippo-best-practices` skill for the discover-then-execute pattern.
 
 **Data type note:** Dimensions (length, width, height) and weight values must be passed as **strings**, not numbers (e.g., `"12"` not `12`). This applies to parcels, customs items, and all weight/dimension fields.
 
@@ -20,8 +22,11 @@ Create and validate a new address using v2 field names. Returns validation resul
 - **Optional:** `address_line_2` (string), `address_line_3` (string), `state_province` (string), `postal_code` (string), `phone` (string), `email` (string), `company` (string), `is_residential` (boolean)
 
 ### `ValidateAddress`
-Validate an existing address by object ID using v2 field names.
-- **Required:** `address_id` (string)
+Validate a US or international address by its fields using v2 field names. Returns validation results plus a recommended address.
+- **Required:** `address_line_1` (string), `country_code` (string, ISO 3166-1 alpha-2)
+- **US needs:** `state_province` + `city_locality` + `address_line_1`, **or** `address_line_1` + `postal_code`
+- **International needs:** `city_locality` + `address_line_1`
+- **Optional:** `city_locality` (string), `state_province` (string), `postal_code` (string), `address_line_2` (string), `organization` (string), `name` (string)
 
 ### `ParseAddress`
 Parse a freeform address string into structured components. Returns v2 field names (no country).
