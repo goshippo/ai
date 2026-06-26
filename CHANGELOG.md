@@ -8,6 +8,9 @@
 - Claude plugin README: replaced the placeholder install step with the community-marketplace install flow (`claude plugin install shippo@claude-community`) and moved `--plugin-dir` to a local-development note.
 - `shippo-support-ticket`: reworded the routing-tag note from a "placeholder, update later" TODO into a permanent description of the configurable routing schema.
 
+### Changed
+- ClawHub bundle 1.4.0 -> 1.4.1: republishes the consolidated `shippo/goshippo` digest with the above content fixes (the publish gate is version-based, so the bundle version is bumped to ship the corrected content to clawhub.ai/shippo/goshippo).
+
 ## 1.5.0
 
 ### Added
