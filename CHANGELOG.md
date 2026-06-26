@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- ClawHub bundle 1.4.1 -> 1.4.2: set the registry display name to "Shippo" (publish now passes `--name "Shippo"`; it had stayed "Goshippo" from the original slug) and dropped the "(Beta)" prefix from the bundle description.
+
 ### Fixed
 - Skills: normalized shared-reference mentions to the canonical `shippo/references/<doc>.md` form (9 stragglers had dropped the `shippo/` prefix), so every reference points at the doc's real location.
 - `shippo/references/tool-reference.md`: reframed as an operation reference invoked through the 4-tool meta-API (the names are operations passed to `shippo_read_execute_tool` / `shippo_write_execute_tool`, not standalone MCP tools), and corrected the `ValidateAddress` entry to document validation by address fields (matching the live server schema) rather than by object ID.

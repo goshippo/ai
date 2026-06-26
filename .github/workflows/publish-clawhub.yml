@@ -120,6 +120,7 @@ jobs:
           npx -y clawhub@0.19.0 skill publish providers/clawhub/skills/goshippo \
             --owner shippo \
             --slug shippo \
+            --name "Shippo" \
             --version "$VERSION" \
             --changelog "Release $VERSION: hosted OAuth MCP (mcp.shippo.com), 4-tool meta-API with PascalCase operation names." \
             --tags latest
