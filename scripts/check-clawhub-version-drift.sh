@@ -1,14 +1,15 @@
 #!/bin/bash
 # check-clawhub-version-drift.sh
 #
-# Fail when the ClawHub bundle CONTENT changed in this PR but the bundle VERSION
-# was NOT bumped. The ClawHub publish workflow (publish-clawhub.yml) is
-# version-gated: it publishes only when the bundle frontmatter version differs
-# from the registry's latest. So a content change without a version bump is a
-# SILENT no-op, the improved content never reaches clawhub.ai/shippo/goshippo
-# and strands behind the current published version. This check turns that
-# silent strand into a loud, actionable error (the same spirit as check-drift,
-# which forces regenerated mirrors to be committed).
+# Fail when the ClawHub bundle CONTENT changed in this PR but the bundle version
+# would NOT publish, i.e. it still equals the ClawHub registry's current latest.
+# publish-clawhub.yml is version-gated: it publishes ONLY when the bundle
+# frontmatter version differs from the registry latest. So a content change that
+# leaves the version equal to what is already published is a SILENT no-op, the
+# regenerated content strands behind the published version on
+# clawhub.ai/shippo/goshippo. This check mirrors the publish gate's own
+# condition (version vs registry latest) and turns the silent strand into a
+# loud, actionable error at PR time.
 #
 # Usage:
 #   scripts/check-clawhub-version-drift.sh <base-ref>   # CI: the PR base SHA
@@ -16,7 +17,8 @@
 set -euo pipefail
 
 BUNDLE_DIR="providers/clawhub/skills/goshippo"
-TEMPLATE="$BUNDLE_DIR/SKILL.md.template"
+BUNDLE_SKILL="$BUNDLE_DIR/SKILL.md"   # generated; carries the published version (matches the publish gate)
+SLUG="goshippo"
 
 BASE="${1:-}"
 if [ -z "$BASE" ]; then
@@ -34,23 +36,34 @@ if [ -z "$CONTENT_CHANGED" ]; then
   exit 0
 fi
 
-# Did the bundle version line change in the template (the source of the version)?
-VERSION_DIFF="$(git diff "$BASE"...HEAD -- "$TEMPLATE" | grep -E '^[+-]version:' || true)"
-if [ -n "$VERSION_DIFF" ]; then
-  echo "  OK: ClawHub bundle content changed AND the bundle version was bumped:"
-  echo "$VERSION_DIFF" | sed 's/^/      /'
+# The version that WOULD publish (publish gate reads the generated SKILL.md).
+VER="$(grep -E '^version:' "$BUNDLE_SKILL" | head -1 | sed -E 's/^version:[[:space:]]*//')"
+if [ -z "$VER" ]; then
+  echo "::error::Could not read ClawHub bundle version from $BUNDLE_SKILL."
+  exit 1
+fi
+
+# Registry latest (clawhub inspect is public, no auth). Fail OPEN on a registry
+# /network error so a transient blip cannot block all PRs; publish-clawhub.yml
+# is the backstop that ultimately gates the real publish.
+LATEST="$(npx -y clawhub@0.19.0 inspect "$SLUG" --json 2>/dev/null \
+  | python3 -c "import json,sys; print((json.load(sys.stdin).get('skill',{}).get('tags',{}) or {}).get('latest',''))" 2>/dev/null || true)"
+if [ -z "$LATEST" ]; then
+  echo "::warning::Could not read ClawHub registry latest for $SLUG (network/registry). Skipping version-drift check; publish-clawhub.yml remains the backstop."
   exit 0
 fi
 
-echo "::error::ClawHub bundle content changed but the bundle version was NOT bumped."
+if [ "$VER" != "$LATEST" ]; then
+  echo "  OK: ClawHub bundle content changed and the bundle version ($VER) differs from the registry latest ($LATEST); it will publish."
+  exit 0
+fi
+
+echo "::error::ClawHub bundle content changed but the bundle version ($VER) equals the registry latest ($LATEST), so publish-clawhub.yml will NOT publish it."
 echo ""
 echo "Changed bundle files:"
 echo "$CONTENT_CHANGED" | sed 's/^/  /'
 echo ""
-echo "publish-clawhub.yml is version-gated: a content change without a version bump"
-echo "does NOT publish, so these changes would silently strand behind the current"
-echo "published version on clawhub.ai/shippo/goshippo."
-echo ""
-echo "Fix: bump 'version:' in $TEMPLATE, run 'npm test', and commit the regenerated"
-echo "bundle so the change actually ships."
+echo "These changes would silently strand behind shippo/$SLUG@$LATEST on clawhub.ai."
+echo "Fix: bump 'version:' in $BUNDLE_DIR/SKILL.md.template to a new version, run"
+echo "'npm test', and commit the regenerated bundle so the change actually ships."
 exit 1
