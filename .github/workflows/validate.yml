@@ -52,6 +52,14 @@ jobs:
         if: github.event_name == 'pull_request'
         run: scripts/check-no-generated-edits.sh ${{ github.event.pull_request.base.sha }}
 
+      - name: Reject ClawHub bundle content change without a version bump
+        # The ClawHub publish workflow (publish-clawhub.yml) is version-gated: a
+        # bundle content change without a version bump silently does NOT publish,
+        # so the change strands behind the current published version. Make that
+        # case a loud error at PR time instead of a quiet no-op at merge.
+        if: github.event_name == 'pull_request'
+        run: scripts/check-clawhub-version-drift.sh ${{ github.event.pull_request.base.sha }}
+
       - name: Validate JSON manifests (syntax)
         run: |
           set -e
