@@ -85,7 +85,9 @@ Not every PR needs every item. Use judgment.
       `providers/**` mirrors. `npm test` regenerates the mirrors.
 - [ ] **Version discipline.** If the change touches anything Claude Code consumes,
       `package.json:version` is bumped and the 4 manifests stay in sync via
-      `npm test`.
+      `npm test`. CI now enforces the bump for the app-plugin footprint
+      (`check-app-plugin-version-drift.sh`); a green Validate means the published
+      `shippo-plugin.zip` will not strand behind `main`.
 - [ ] **OAuth-only / no test-mode.** No reintroduction of API-key setup,
       `SHIPPO_API_KEY`, or "test mode" guidance (the hosted MCP is live OAuth only).
 - [ ] **Public-safe.** No secrets, no internal infrastructure names, no internal

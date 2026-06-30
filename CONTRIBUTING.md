@@ -78,12 +78,16 @@ All channels, including the ClawHub digest, target the hosted OAuth MCP. Keep th
 
 **Single source of truth:** `package.json:version`. Edit it once; `npm test` propagates the value into both `.claude-plugin/marketplace.json` and `providers/claude/plugin/.claude-plugin/plugin.json` via `scripts/inject-version.js`. Don't edit the manifest version fields directly, they'll get overwritten on next sync.
 
-Bump `package.json:version` when the change affects Claude Code distribution, i.e., changes to:
+Bump `package.json:version` when the change affects Claude Code distribution, i.e., anything that changes the published `shippo-plugin.zip`:
 
 - A skill in `skills/<name>/SKILL.md`
 - A reference in `skills/shippo/references/`
 - The `.mcp.json` config
 - The plugin manifest itself
+- The plugin's own `README.md` / `LICENSE` under `providers/claude/plugin/`
+- `scripts/build-app-plugin.js` (the build that produces the zip)
+
+This is CI-enforced: `scripts/check-app-plugin-version-drift.sh` (the "Reject app-plugin content change without a version bump" step in `validate.yml`) fails a PR that changes any of the above without a version bump. Without it, `release.yml` (version-gated) would not re-cut the release and the published zip would silently strand behind `main`.
 
 Don't bump the plugin version for ClawHub-only changes (edits to the digest's framing template, ClawHub-bundled references that aren't in canonical, etc.). The ClawHub publish version is independent.
 
