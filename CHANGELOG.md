@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## 1.5.1
+
+`package.json:version` 1.5.0 -> 1.5.1. Re-cuts the Claude app-plugin release
+(`shippo-plugin.zip`) so the published asset ships the content fixes below; the
+prior content landed on `main` after v1.5.0 without a version bump, leaving the
+published release stale.
+
 ### Fixed
 - Skills: normalized shared-reference mentions to the canonical `shippo/references/<doc>.md` form (9 stragglers had dropped the `shippo/` prefix), so every reference points at the doc's real location.
 - `shippo/references/tool-reference.md`: reframed as an operation reference invoked through the 4-tool meta-API (the names are operations passed to `shippo_read_execute_tool` / `shippo_write_execute_tool`, not standalone MCP tools), and corrected the `ValidateAddress` entry to document validation by address fields (matching the live server schema) rather than by object ID.
