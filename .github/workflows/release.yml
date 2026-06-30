@@ -86,7 +86,7 @@ jobs:
         # dist/app-plugin/shippo-plugin.zip --repo goshippo/ai`). Generated before
         # the asset is uploaded so the published artifact is the attested one.
         if: steps.gate.outputs.release == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/app-plugin/shippo-plugin.zip
 
