@@ -1,6 +1,6 @@
 {
   "name": "shippo",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Ship packages with Shippo. Multi-carrier rate shopping, label generation, package tracking, address validation, customs declarations, and batch processing from CSV files.",
   "author": {
     "name": "Shippo",
