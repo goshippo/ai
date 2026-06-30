@@ -60,6 +60,17 @@ jobs:
         if: github.event_name == 'pull_request'
         run: scripts/check-clawhub-version-drift.sh ${{ github.event.pull_request.base.sha }}
 
+      - name: Reject app-plugin content change without a version bump
+        # release.yml is version-gated the same way: a change to the app-plugin
+        # zip footprint (providers/claude/plugin or build-app-plugin.js) without a
+        # package.json:version bump does NOT cut a new release, so the published
+        # shippo-plugin.zip strands behind main (this is how v1.5.0 went stale).
+        # Sibling of the ClawHub guard above, for the GitHub Release channel.
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/check-app-plugin-version-drift.sh ${{ github.event.pull_request.base.sha }}
+
       - name: Validate JSON manifests (syntax)
         run: |
           set -e
@@ -440,7 +451,7 @@ jobs:
             echo "| Skills | $SKILLS |"
             echo "| MCP tools in catalog | $TOOLS |"
             echo ""
-            echo "**Covered:** direct-edit guard, JSON manifests, token-leak + ClawScan scans, .mcp.json schema (Claude + Codex), OAuth reachability probe, plugin loaders (claude + codex), frontmatter, tool references vs catalog, agentskills.io spec, ClawHub publish dry-run, four-way version match, sync drift."
+            echo "**Covered:** direct-edit guard, JSON manifests, token-leak + ClawScan scans, .mcp.json schema (Claude + Codex), OAuth reachability probe, plugin loaders (claude + codex), frontmatter, tool references vs catalog, agentskills.io spec, ClawHub publish dry-run, four-way version match, sync drift, ClawHub + app-plugin version-drift guards."
             echo ""
             echo "$CHECKS"
           } > validate-summary.md
