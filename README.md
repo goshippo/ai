@@ -11,6 +11,7 @@ It contains:
 * **OpenAI Codex Plugin** ([`providers/codex/plugin/`](/providers/codex/plugin)): Install via the Codex plugin marketplace; bundles the skills plus the OAuth MCP server.
 * **ClawHub Skill** ([`providers/clawhub/skills/shippo/`](/providers/clawhub/skills/shippo)): Install via `openclaw skills install @shippo/shippo`.
 * **Claude apps (claude.ai / Desktop / Cowork)**: The whole plugin is packaged as a single upload-ready ZIP (`shippo-plugin.zip`), attached to every GitHub Release. One upload provisions all the skills.
+* **Knowledge Pack (ChatGPT and other chat assistants)** ([`providers/knowledge-pack/shippo-knowledge-pack.md`](/providers/knowledge-pack/shippo-knowledge-pack.md)): A single consolidated markdown for assistants that do **not** load `SKILL.md` folders. A user drops it into a chat, a Custom GPT's Knowledge, or a Project as context. It provides the shipping knowledge; live actions still use the hosted MCP connector.
 
 ## What is a skill?
 
@@ -30,7 +31,7 @@ Agents load skills by **progressive disclosure** in three stages:
 
 [Agent Skills](https://agentskills.io) is an open standard originally developed by Anthropic. The same `SKILL.md` works in Claude Code, Cursor, OpenAI Codex, GitHub Copilot, VS Code, and 30+ other agents.
 
-In this repo, the 9 skills under `skills/` are the **canonical source**. They're propagated into `providers/claude/plugin/skills/` and `providers/codex/plugin/skills/` (1:1 mirrors) and `providers/clawhub/skills/shippo/` (consolidated digest) automatically by the sync scripts.
+In this repo, the 9 skills under `skills/` are the **canonical source**. They're propagated into `providers/claude/plugin/skills/` and `providers/codex/plugin/skills/` (1:1 mirrors), `providers/clawhub/skills/shippo/` (consolidated digest), and `providers/knowledge-pack/shippo-knowledge-pack.md` (a single upload-ready knowledge pack for ChatGPT and other non-skill-loading assistants) automatically by the sync scripts.
 
 ## Model Context Protocol (MCP)
 

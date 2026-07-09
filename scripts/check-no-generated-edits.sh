@@ -182,6 +182,16 @@ for file in $CHANGED_PROVIDERS; do
     fi
   fi
 
+  # (g) Knowledge-pack channel, a consolidated digest of canonical skills +
+  # references for non-skill-loading assistants (ChatGPT and similar). Explained
+  # by any canonical skill/reference/template change or a new-file add; content
+  # integrity is enforced by check-drift.
+  if echo "$file" | grep -qE '^providers/knowledge-pack/'; then
+    if canonical_changed || canonical_reference_changed || template_changed || is_added "$file"; then
+      continue
+    fi
+  fi
+
   # No explanation found, this is a direct edit
   VIOLATIONS+=("$file")
 done
