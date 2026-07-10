@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- `glama.json` at the repo root: claims the Glama directory listing for the Shippo MCP server (maintainer `wyatt-shippo`), so we control the listing's name, description, and category once Glama syncs it from the official MCP Registry. Required for org-hosted repos (GitHub auth alone does not claim a listing).
+
 ## 1.5.1
 
 `package.json:version` 1.5.0 -> 1.5.1. Re-cuts the Claude app-plugin release
