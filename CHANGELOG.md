@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- `server.json` at the repo root: metadata for publishing the hosted Shippo MCP server (`mcp.shippo.com`) to the official MCP Registry as `com.shippo/shippo-mcp`. Remote streamable-http entry; source of truth for the registry listing. Published via DNS auth on the shippo.com apex (TXT record in shippo-tf-services #6996), so no repo-side credentials or auto-publish workflow are wired here.
+- `server.json` at the repo root: metadata for publishing the hosted Shippo MCP server (`mcp.shippo.com`) to the official MCP Registry as `com.shippo/shippo-mcp`. Remote streamable-http entry; source of truth for the registry listing. Publishing uses DNS auth on the shippo.com apex (verification TXT record pending in shippo-tf-services #6996), so no repo-side credentials or auto-publish workflow are wired here.
 
 ## 1.5.1
 

@@ -14,7 +14,8 @@
   ],
   "repository": {
     "url": "https://github.com/goshippo/ai",
-    "source": "github"
+    "source": "github",
+    "id": "1264221490"
   },
   "websiteUrl": "https://docs.goshippo.com/docs/Guides_general/MCPServer",
   "version": "1.0.0",
