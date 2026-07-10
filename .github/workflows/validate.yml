@@ -297,10 +297,10 @@ jobs:
           # or interact with anything else.
           export HOME=$(mktemp -d)
           claude plugin marketplace add "$PWD/.claude-plugin/marketplace.json"
-          claude plugin install shippo@goshippo
+          claude plugin install shippo@shippo
           claude plugin list | tee /tmp/plugin-list.txt
-          grep -q '^\s*❯ shippo@goshippo' /tmp/plugin-list.txt \
-            || (echo "::error::plugin 'shippo@goshippo' not present in 'plugin list' after install"; exit 1)
+          grep -q '^\s*❯ shippo@shippo' /tmp/plugin-list.txt \
+            || (echo "::error::plugin 'shippo@shippo' not present in 'plugin list' after install"; exit 1)
           echo "✓ install flow works end-to-end"
 
       - name: Smoke-test Codex plugin loader (codex CLI)
@@ -316,9 +316,9 @@ jobs:
           codex --version
           codex plugin marketplace add "$PWD"
           codex plugin list | tee /tmp/codex-plugins.txt
-          grep -q 'shippo@goshippo' /tmp/codex-plugins.txt \
-            || (echo "::error::codex plugin list did not discover 'shippo@goshippo' from .agents/plugins/marketplace.json"; exit 1)
-          echo "✓ Codex catalog parsed by the codex CLI; shippo@goshippo discovered"
+          grep -q 'shippo@shippo' /tmp/codex-plugins.txt \
+            || (echo "::error::codex plugin list did not discover 'shippo@shippo' from .agents/plugins/marketplace.json"; exit 1)
+          echo "✓ Codex catalog parsed by the codex CLI; shippo@shippo discovered"
 
       - name: Validate SKILL.md frontmatter (custom)
         run: npm run validate-frontmatter
