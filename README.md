@@ -90,7 +90,7 @@ Or install from the plugin marketplace:
 
 ```bash
 /plugin marketplace add goshippo/ai
-/plugin install shippo
+/plugin install shippo@goshippo
 ```
 
 On first use, run `/mcp`, select the Shippo server, and sign in to authorize the MCP over OAuth (no API key to copy).
@@ -103,7 +103,7 @@ Codex installs the Shippo plugin (skills + OAuth MCP) from this repo's plugin ma
 
 ```bash
 codex plugin marketplace add goshippo/ai
-codex plugin add shippo@shippo   # install the "shippo" plugin
+codex plugin add shippo@goshippo   # install the "shippo" plugin
 codex mcp login shippo           # authorize the remote MCP over OAuth
 ```
 
