@@ -88,6 +88,10 @@ template_changed() {
 }
 
 # canonical_reference_changed: returns 0 if any shippo/references/ file changed
+knowledge_pack_generator_changed() {
+  echo "$CHANGED_ALL" | grep -q '^scripts/build-knowledge-pack\.js$' && return 0 || return 1
+}
+
 canonical_reference_changed() {
   echo "$CHANGED_ALL" | grep -q '^skills/shippo/references/' && return 0 || return 1
 }
@@ -178,6 +182,17 @@ for file in $CHANGED_PROVIDERS; do
   # new-file add (e.g. a bundle directory rename; check-drift enforces content)
   if echo "$file" | grep -qE '^providers/clawhub/skills/shippo/references/'; then
     if canonical_reference_changed || is_added "$file"; then
+      continue
+    fi
+  fi
+
+  # (g) Knowledge-pack channel, a consolidated digest of canonical skills +
+  # references for non-skill-loading assistants (ChatGPT and similar). Explained
+  # by any canonical skill/reference/template change, a generator-script
+  # (build-knowledge-pack.js) change, or a new-file add; content
+  # integrity is enforced by check-drift.
+  if echo "$file" | grep -qE '^providers/knowledge-pack/'; then
+    if canonical_changed || canonical_reference_changed || template_changed || knowledge_pack_generator_changed || is_added "$file"; then
       continue
     fi
   fi

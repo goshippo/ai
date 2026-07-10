@@ -1,7 +1,8 @@
-name: Release app-plugin
+name: Release app-plugin + knowledge pack
 
-# Cuts a GitHub Release of the Claude app plugin ZIP (claude.ai / Claude
-# Desktop / Cowork) whenever package.json:version is bumped on main.
+# Cuts a GitHub Release whenever package.json:version is bumped on main,
+# attaching the Claude app plugin ZIP (claude.ai / Claude Desktop / Cowork)
+# and the knowledge pack markdown (ChatGPT / Gemini / other assistants).
 #
 # This reuses the repo's existing version pipeline rather than a parallel
 # trigger: per CONTRIBUTING "Version discipline", any change to a skill
@@ -17,7 +18,9 @@ on:
       - 'skills/**'
       - 'package.json'
       - 'providers/claude/plugin/**'
+      - 'providers/knowledge-pack/**'
       - 'scripts/build-app-plugin.js'
+      - 'scripts/build-knowledge-pack.js'
       - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
@@ -80,15 +83,27 @@ jobs:
           echo "Built artifact:"
           ls -la dist/app-plugin/
 
+      - name: Build knowledge pack (banner-stripped for release)
+        if: steps.gate.outputs.release == 'true'
+        run: |
+          npm run build:knowledge-pack
+          mkdir -p dist
+          # Drop the 2-line AUTO-GENERATED banner (HTML comment + blank line) for a clean download.
+          tail -n +3 providers/knowledge-pack/shippo-knowledge-pack.md > dist/shippo-knowledge-pack.md
+          echo "Built artifact:"
+          ls -la dist/shippo-knowledge-pack.md
+
       - name: Attest build provenance
-        # Auditing: cryptographically binds shippo-plugin.zip to the exact commit
+        # Auditing: cryptographically binds each published asset to the exact commit
         # + workflow run that produced it (verifiable with `gh attestation verify
-        # dist/app-plugin/shippo-plugin.zip --repo goshippo/ai`). Generated before
-        # the asset is uploaded so the published artifact is the attested one.
+        # <asset> --repo goshippo/ai`). Generated before the assets are uploaded so
+        # the published artifacts are the attested ones.
         if: steps.gate.outputs.release == 'true'
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/app-plugin/shippo-plugin.zip
+          subject-path: |
+            dist/app-plugin/shippo-plugin.zip
+            dist/shippo-knowledge-pack.md
 
       - name: Publish GitHub Release
         if: steps.gate.outputs.release == 'true'
@@ -99,8 +114,8 @@ jobs:
           set -e
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
-              --notes "Shippo plugin packaged for the Claude apps (claude.ai / Claude Desktop / Cowork). Download shippo-plugin.zip and add it via the app's Plugins UI; admins can provision it org-wide via Organization settings → Plugins (one upload, all skills)."
+              --notes "Shippo plugin (shippo-plugin.zip, for the Claude apps: claude.ai / Claude Desktop / Cowork) and knowledge pack (shippo-knowledge-pack.md, a skills-as-context document for ChatGPT / Gemini / other assistants), both built from the canonical skills. Add the plugin via the app's Plugins UI (admins can provision it org-wide via Organization settings → Plugins); add the knowledge pack as a Project file, Custom GPT knowledge, or an attachment."
           fi
           # --clobber so re-runs replace the same-named asset idempotently.
-          gh release upload "$TAG" dist/app-plugin/shippo-plugin.zip --clobber
-          echo "Published shippo-plugin.zip to release $TAG."
+          gh release upload "$TAG" dist/app-plugin/shippo-plugin.zip dist/shippo-knowledge-pack.md --clobber
+          echo "Published shippo-plugin.zip and shippo-knowledge-pack.md to release $TAG."
