@@ -57,13 +57,13 @@ Every operation name in this skill (`ValidateAddress`, `CreateShipment`, `Create
 
 | Building…                                          | Recommended primitive          | See                                                                                        |
 |----------------------------------------------------|--------------------------------|--------------------------------------------------------------------------------------------|
-| Checkout flow with live shipping rates             | Rates at Checkout              | Rate Shopping (+ the Reference Guides section below)                               |
+| Checkout flow with live shipping rates             | Rates at Checkout              | Rate Shopping (+ the "Rate Shopping Guide" section in the Reference Guides below)                               |
 | Single label purchase                              | Shipments + Transactions       | Label Purchase                                                                              |
-| Bulk label generation from CSV                     | Batches + Manifests            | Batch Shipping (+ the Reference Guides section below)                                        |
+| Bulk label generation from CSV                     | Batches + Manifests            | Batch Shipping (+ the "CSV Batch Format Specification" section in the Reference Guides below)                                        |
 | Track packages across carriers                     | Tracking + webhooks            | Tracking                                                                                    |
-| Validate user addresses before save                | Addresses v2                   | Address Validation (+ the Reference Guides section below)                               |
+| Validate user addresses before save                | Addresses v2                   | Address Validation (+ the "Address Formats" section in the Reference Guides below)                               |
 | Analyze shipping spend / optimize carriers         | Shipments + Transactions list  | Shipping Analysis                                                                           |
-| International shipments                            | Customs Items + Declarations   | Label Purchase (+ the Reference Guides section below + the Reference Guides section below) |
+| International shipments                            | Customs Items + Declarations   | Label Purchase (+ the "Customs Declaration Guide" section in the Reference Guides below + the "International Shipping Guide" section in the Reference Guides below) |
 
 Read the relevant skill or reference before answering integration questions or writing code.
 
@@ -78,7 +78,7 @@ Read the relevant skill or reference before answering integration questions or w
 
 ### Response handling
 
-The MCP wraps responses in a Speakeasy envelope. Some failures bypass the envelope. See the Reference Guides section below and the Reference Guides section below for parsing logic and error-handling patterns.
+The MCP wraps responses in a Speakeasy envelope. Some failures bypass the envelope. See the "Response Envelope" section in the Reference Guides below and the "Error Reference" section in the Reference Guides below for parsing logic and error-handling patterns.
 
 ### Connecting
 
@@ -210,7 +210,7 @@ Map user requests: "overnight" = estimated_days 1, "2-day" = estimated_days <= 2
 
 ### International Rates
 
-Some carriers may return international rates without a customs declaration, but others will not. If no rates are returned, try attaching a customs declaration to the shipment. Some carriers also require a phone number on the destination address for international rate retrieval. Inform the user that customs will be required at label purchase time regardless. See the Reference Guides section below for customs details.
+Some carriers may return international rates without a customs declaration, but others will not. If no rates are returned, try attaching a customs declaration to the shipment. Some carriers also require a phone number on the destination address for international rate retrieval. Inform the user that customs will be required at label purchase time regardless. See the "Customs Declaration Guide" section in the Reference Guides below for customs details.
 
 ---
 
@@ -284,11 +284,11 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 
 ### International Label
 
-All domestic steps apply, plus customs handling before shipment creation. See the Reference Guides section below for the full customs workflow.
+All domestic steps apply, plus customs handling before shipment creation. See the "Customs Declaration Guide" section in the Reference Guides below for the full customs workflow.
 
 1. Optionally validate addresses with `ValidateAddress`. Sender must include `email` and `phone`. Ask if missing.
 2. Create customs items: call `CreateCustomsItem` per item (description, quantity, net_weight, mass_unit, value_amount, value_currency, origin_country, tariff_number). Alternatively, you can skip this step and pass inline item objects directly in the declaration (step 3).
-3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See the Reference Guides section below for field details.
+3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See the "Customs Declaration Guide" section in the Reference Guides below for field details.
 4. Call `CreateShipment` with all standard fields plus `customs_declaration` (the declaration object_id).
 5. Present rates, **confirm purchase** (see Purchase Confirmation Gate), then purchase label and return results as in the domestic flow.
 
@@ -394,7 +394,7 @@ Use orders to represent e-commerce fulfillment requests. An order captures the s
 
 ### Track by Number
 
-1. Determine carrier and tracking number. Carrier must be a lowercase Shippo token (e.g., `usps`, `ups`, `fedex`, `dhl_express`). See the Reference Guides section below for tracking number format hints per carrier. If uncertain, ask the user.
+1. Determine carrier and tracking number. Carrier must be a lowercase Shippo token (e.g., `usps`, `ups`, `fedex`, `dhl_express`). See the "Carrier Guide" section in the Reference Guides below for tracking number format hints per carrier. If uncertain, ask the user.
 2. Call `GetTrack` with `carrier` and `tracking_number`.
 3. Key response fields: `tracking_status` (status, status_details, status_date, location), `tracking_history`, `eta`.
 4. Each tracking event includes a `substatus` object with `code`, `text`, and `action_required` (boolean). Include substatus details when presenting tracking history -- these provide more specific information about what happened at each step.
@@ -404,7 +404,7 @@ Use orders to represent e-commerce fulfillment requests. An order captures the s
 
 ### Status Values
 
-See the Reference Guides section below for carrier-specific status nuances. Standard values:
+See the "Carrier Guide" section in the Reference Guides below for carrier-specific status nuances. Standard values:
 
 | Status | Meaning |
 |---|---|
@@ -465,11 +465,11 @@ Before every call to `PurchaseBatch`, summarize the following and ask the user f
 
 ### CSV Batch Processing
 
-See the Reference Guides section below for the column specification.
+See the "CSV Batch Format Specification" section in the Reference Guides below for the column specification.
 
 1. Read and parse the CSV. Validate required columns are present. Report row count.
 2. Validate each row for non-empty required fields. Report invalid rows with reasons.
-3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See the Reference Guides section below. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
+3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See the "Customs Declaration Guide" section in the Reference Guides below. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
 4. Build the `batch_shipments` array with inline address and parcel objects per row.
 5. Call `CreateBatch` with the array.
 6. Poll `GetBatch` until status changes from `VALIDATING` to `VALID`. See Polling Intervals below.
@@ -545,9 +545,9 @@ Parse CSV -> `CreateCustomsDeclaration` (international rows) -> `CreateBatch` ->
 
 1. Confirm the route.
 2. Define dimension profiles to test (or use user-provided ones).
-3. Check `ListCarrierParcelTemplates` and `ListUserParcelTemplates` for flat-rate and saved templates. See the Reference Guides section below for dimensional weight and flat-rate guidance.
+3. Check `ListCarrierParcelTemplates` and `ListUserParcelTemplates` for flat-rate and saved templates. See the "Rate Shopping Guide" section in the Reference Guides below for dimensional weight and flat-rate guidance.
 4. Call `CreateShipment` per profile on the same route.
-5. Compare: cheapest rate, carrier options, fastest option per profile. Note where flat-rate templates beat custom dimensions and where dimensional weight causes price jumps. See the Reference Guides section below for carrier-specific weight limits and surcharges.
+5. Compare: cheapest rate, carrier options, fastest option per profile. Note where flat-rate templates beat custom dimensions and where dimensional weight causes price jumps. See the "Carrier Guide" section in the Reference Guides below for carrier-specific weight limits and surcharges.
 
 ---
 
@@ -780,7 +780,7 @@ token + tracking number) for `tracking_status`, `tracking_history[]`, and `eta`.
   carrier/service-dependent, so **read the actual response fields rather than
   assuming names**: the `label-purchase` skill documents the common added-service
   options (signature, insurance, Saturday delivery) and
-  the Reference Guides section below covers per-carrier availability. Surface
+  the "Carrier Guide" section in the Reference Guides below covers per-carrier availability. Surface
   only what is actually present; omit the rest.
 - **`messages` noise:** a shipment's `messages` array often carries routine
   "carrier doesn't support option" / "out of service area" entries. These are

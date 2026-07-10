@@ -1,5 +1,5 @@
 /*
- * build-knowledge-pack.js — Generates providers/knowledge-pack/shippo-knowledge-pack.md
+ * build-knowledge-pack.js: Generates providers/knowledge-pack/shippo-knowledge-pack.md
  *
  * A single, self-contained "Shippo Shipping Knowledge Pack" for assistants that
  * do NOT load SKILL.md folders (ChatGPT, Gemini, and other chat apps). A user
@@ -7,7 +7,7 @@
  * context. It gives the assistant Shippo's shipping knowledge; live actions still
  * require the Shippo MCP connector (called out in the header).
  *
- * Source: the composed ClawHub digest (providers/clawhub/skills/goshippo/SKILL.md)
+ * Source: the composed ClawHub digest (providers/clawhub/skills/shippo/SKILL.md)
  * plus the canonical references (skills/shippo/references/). This script must run
  * AFTER compose-clawhub-digest.js in the sync chain (it reads the fresh digest).
  *
@@ -94,7 +94,19 @@ function main() {
   body = body.replace('in Claude Code, run `/mcp` and sign in', 'sign in to Shippo when your client prompts you');
   body = body.replace('in OpenClaw, `openclaw mcp login shippo`; in Claude Code, `/mcp`', "your client's sign-in prompt");
   // Redirect dangling reference-file pointers to this file's appendix.
-  body = body.replace(/`(?:shippo\/)?references\/[a-z0-9-]+\.md`/g, 'the Reference Guides section below');
+  // Map each reference slug to its own H1 so inlined pointers stay specific
+  // ("the Customs Declaration Guide section..." instead of a generic phrase).
+  const refTitles = {};
+  for (const name of REF_ORDER) {
+    const rp = path.join(REFDIR, name + '.md');
+    if (!fs.existsSync(rp)) continue;
+    const m = stripFrontmatterAndBanner(fs.readFileSync(rp, 'utf8')).match(/^#\s+(.+)$/m);
+    if (m) refTitles[name] = m[1].trim();
+  }
+  body = body.replace(/`(?:shippo\/)?references\/([a-z0-9-]+)\.md`/g, (full, slug) =>
+    refTitles[slug]
+      ? 'the "' + refTitles[slug] + '" section in the Reference Guides below'
+      : 'the Reference Guides section below');
 
   const parts = [
     BANNER + HEADER,
