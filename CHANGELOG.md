@@ -5,6 +5,7 @@
 ### Added
 - Knowledge pack channel for assistants that do not load SKILL.md folders (ChatGPT, Gemini, and similar): `scripts/build-knowledge-pack.js` composes `providers/knowledge-pack/shippo-knowledge-pack.md` from the canonical skills and references, runs in `npm run sync`, and is guarded by `check-no-generated-edits` rule (g). `release.yml` now builds the banner-stripped pack, attests it, and attaches it to every version-bump release alongside `shippo-plugin.zip`.
 - `server.json` at the repo root: metadata for publishing the hosted Shippo MCP server (`mcp.shippo.com`) to the official MCP Registry as `com.shippo/shippo-mcp`. Remote streamable-http entry; source of truth for the registry listing. Publishing uses DNS auth on the shippo.com apex (verification TXT record live via shippo-tf-services #6996), so no repo-side credentials or auto-publish workflow are wired here.
+- `glama.json` at the repo root: claims the Glama directory listing for the Shippo MCP server (maintainer `wyatt-shippo`), so we control the listing's name, description, and category once Glama syncs it from the official MCP Registry. Required for org-hosted repos (GitHub auth alone does not claim a listing).
 
 ## 1.5.1
 
