@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- `server.json` at the repo root: metadata for publishing the hosted Shippo MCP server (`mcp.shippo.com`) to the official MCP Registry as `com.shippo/shippo-mcp`. Remote streamable-http entry; source of truth for the registry listing. Published via DNS auth on the shippo.com apex (TXT record in shippo-tf-services #6996), so no repo-side credentials or auto-publish workflow are wired here.
+
 ## 1.5.1
 
 `package.json:version` 1.5.0 -> 1.5.1. Re-cuts the Claude app-plugin release
