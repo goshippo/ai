@@ -26,7 +26,7 @@ Include the Jira ticket code if there is one.
 - [ ] Self-reviewed the diff before requesting review
 - [ ] Edited canonical sources only (under `skills/`), NOT derived files in `providers/` (exception: `providers/clawhub/skills/shippo/SKILL.md.template` is the editable source for ClawHub digest framing)
 - [ ] Ran `npm test` locally and committed the synced output
-- [ ] Bumped `version` in `package.json` ONLY (the single source of truth) if this PR changes anything Claude Code consumes, skill, reference, plugin manifest, `.mcp.json`. `npm test` propagates it into `.claude-plugin/marketplace.json` and `providers/claude/plugin/.claude-plugin/plugin.json`, do NOT hand-edit those manifests.
+- [ ] Bumped `version` in `package.json` ONLY (the single source of truth) if this PR changes anything Claude Code consumes, skill, reference, plugin manifest, `.mcp.json`, the plugin's `README.md`/`LICENSE` under `providers/claude/plugin/`, or `scripts/build-app-plugin.js`. CI (`check-app-plugin-version-drift.sh`) fails the PR if you change any of these without bumping. `npm test` propagates the bump into `.claude-plugin/marketplace.json` and `providers/claude/plugin/.claude-plugin/plugin.json`, do NOT hand-edit those manifests.
 - [ ] If this PR changes ClawHub-only framing (Setup, Error Handling, Security, section ordering), edited `providers/clawhub/skills/shippo/SKILL.md.template`: workflow body changes flow into the auto-generated digest automatically via `npm test`
 - [ ] Updated `CHANGELOG.md` under "Unreleased"
 - [ ] No em dashes; tool names match `tools/mcp-catalog.json`; no API-key / test-mode content
