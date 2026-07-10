@@ -97,6 +97,10 @@ The ClawHub bundle's version lives in `providers/clawhub/skills/shippo/SKILL.md.
 
 Bump it manually when the ClawHub-published content changes (whether the change came from canonical workflow content or the digest's framing).
 
+### MCP Registry server.json version (decoupled)
+
+The root `server.json` `version` is the **registry listing's** version on the official MCP Registry (registry.modelcontextprotocol.io), independent of `package.json:version` (same decoupling as the ClawHub bundle). Bump it only when the listing content itself changes (server name, description, icon, websiteUrl, remotes), then re-publish with `mcp-publisher publish`. Skill and plugin releases do not require a registry republish, and bumping `package.json:version` must not touch `server.json`.
+
 ## Adding a new skill
 
 1. Create `skills/<new-skill-name>/SKILL.md` with valid frontmatter (`name`, `description` at minimum).
