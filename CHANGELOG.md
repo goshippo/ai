@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Knowledge pack channel for assistants that do not load SKILL.md folders (ChatGPT, Gemini, and similar): `scripts/build-knowledge-pack.js` composes `providers/knowledge-pack/shippo-knowledge-pack.md` from the canonical skills and references, runs in `npm run sync`, and is guarded by `check-no-generated-edits` rule (g). `release.yml` now builds the banner-stripped pack, attests it, and attaches it to every version-bump release alongside `shippo-plugin.zip`.
+
 ## 1.5.1
 
 `package.json:version` 1.5.0 -> 1.5.1. Re-cuts the Claude app-plugin release

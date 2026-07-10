@@ -14,10 +14,11 @@
   },
   "scripts": {
     "inject-version": "node scripts/inject-version.js",
-    "sync": "node scripts/inject-version.js && node scripts/sync.js && node scripts/compose-clawhub-digest.js && node scripts/build-clawhub-bundle.js",
+    "sync": "node scripts/inject-version.js && node scripts/sync.js && node scripts/compose-clawhub-digest.js && node scripts/build-clawhub-bundle.js && node scripts/build-knowledge-pack.js",
     "sync:claude": "node scripts/inject-version.js && node scripts/sync.js",
     "sync:clawhub": "node scripts/compose-clawhub-digest.js && node scripts/build-clawhub-bundle.js",
     "compose:clawhub": "node scripts/compose-clawhub-digest.js",
+    "build:knowledge-pack": "node scripts/build-knowledge-pack.js",
     "build:app-plugin": "node scripts/build-app-plugin.js",
     "check:app-plugin": "node scripts/build-app-plugin.js --check",
     "check-drift": "git diff --quiet -- providers/ '.claude-plugin/' ':(exclude)providers/README.md' ':(exclude)providers/clawhub/skills/shippo/SKILL.md.template' || (echo 'ERROR: providers/ differs from HEAD after sync. If you just edited canonical (skills/ or package.json), this is EXPECTED: commit the regenerated providers/ files with your canonical change. If you did not touch canonical, the committed mirrors were stale, run \"npm run sync\" and commit the result.' && exit 1)",
