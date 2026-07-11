@@ -45,6 +45,10 @@ For per-tool semantics and usage, see the [Shippo MCP server docs](https://docs.
 
 Building on OpenAI? See [Using the Shippo MCP from the OpenAI Responses API / Agents SDK](docs/openai-responses-mcp.md) for the developer config (no submission required).
 
+## Agentic commerce
+
+Building an agentic checkout that needs shipping options? [`examples/acp-fulfillment/`](/examples/acp-fulfillment) is a small, typed, zero-dependency converter that maps a Shippo rates response to [Agentic Commerce Protocol (ACP)](https://github.com/agentic-commerce-protocol/agentic-commerce-protocol) `fulfillment_options`, with a field-mapping table, spec citations, a runnable demo, and tests.
+
 ## Capabilities
 
 The 9 skills in this repo are organized by **mode of engagement**: what the user is doing, not by product surface. The AI assistant matches the user's intent to one of three modes, then loads the right skill.
