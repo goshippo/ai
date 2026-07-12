@@ -1,0 +1,15 @@
+{
+  "object_id": "545ab0a1b4a3457eb920c4934d3e2f8f",
+  "amount": "12.50",
+  "currency": "USD",
+  "provider": "USPS",
+  "provider_image_75": "https://shippo-static.s3.amazonaws.com/providers/75/USPS.png",
+  "servicelevel": {
+    "name": "Priority Mail",
+    "token": "usps_priority",
+    "terms": ""
+  },
+  "estimated_days": 2,
+  "duration_terms": "Delivery in 1 to 3 business days.",
+  "attributes": ["CHEAPEST"]
+}
