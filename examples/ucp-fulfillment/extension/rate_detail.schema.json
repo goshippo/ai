@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shippo.com/ucp/schemas/rate_detail.json",
+  "title": "com.shippo.shipping.rate_detail",
+  "description": "Vendor annotation extension for UCP fulfillment options. Each fulfillment option produced from a Shippo rate MAY carry a `com.shippo.shipping.rate_detail` object under the option, keyed by this reverse-domain identifier. The base option fields (id, title, description, totals) are defined by dev.ucp.shopping.fulfillment and remain the sole rendering contract. This object carries the machine-readable Shippo identifiers a Shippo-aware platform needs to turn the buyer's selection into an actual label purchase. Consumers that do not recognize the key ignore it, per UCP's open-option rule.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rate_id", "carrier_account", "servicelevel_token"],
+  "properties": {
+    "rate_id": {
+      "type": "string",
+      "description": "Shippo Rate object_id. Pass this as `rate` when creating a Transaction (label) via the Shippo API.",
+      "examples": ["adcfdddf8ec64b84ad22772bce3ea37a"]
+    },
+    "provider": {
+      "type": "string",
+      "description": "Carrier provider name from the Shippo rate (`provider`).",
+      "examples": ["USPS", "UPS", "FedEx"]
+    },
+    "carrier_account": {
+      "type": "string",
+      "description": "Shippo carrier account object_id backing this rate (`carrier_account`).",
+      "examples": ["078870331023437cb917f5187429b093"]
+    },
+    "servicelevel_token": {
+      "type": "string",
+      "description": "Shippo servicelevel token (`servicelevel.token`). Stable machine identifier for the carrier service.",
+      "examples": ["usps_priority", "usps_priority_express"]
+    },
+    "servicelevel_name": {
+      "type": "string",
+      "description": "Human-readable service name (`servicelevel.name`).",
+      "examples": ["Priority Mail", "Priority Mail Express"]
+    },
+    "servicelevel_terms": {
+      "type": "string",
+      "description": "Carrier terms for the service (`servicelevel.terms`). Often empty.",
+      "default": ""
+    },
+    "estimated_days": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Estimated transit time in days (`estimated_days`). Advisory average from the carrier, not binding. Present here as structured data because the dev.ucp.shopping.fulfillment checkout option has no structured delivery-estimate field: at checkout, timing is rendered from `description` (see README caveats).",
+      "examples": [2]
+    },
+    "duration_terms": {
+      "type": "string",
+      "description": "Carrier's human-readable delivery-window phrase (`duration_terms`). This is the source text folded into the option `description.plain`.",
+      "examples": ["Delivery in 1 to 3 business days"]
+    },
+    "arrives_by": {
+      "type": ["string", "null"],
+      "description": "Local time-of-day the shipment is expected to arrive, when the carrier provides it (`arrives_by`).",
+      "examples": ["08:30:00"]
+    },
+    "zone": {
+      "type": ["string", "null"],
+      "description": "Carrier rating zone for the shipment (`zone`)."
+    },
+    "amount": {
+      "type": "string",
+      "description": "Original rate amount as a decimal string in `currency` major units (`amount`), preserved verbatim. The renderable price lives in the base option `totals[]` in minor units; this field is the un-rounded source value.",
+      "examples": ["5.50"]
+    },
+    "currency": {
+      "type": "string",
+      "description": "ISO 4217 currency of `amount` (`currency`).",
+      "examples": ["USD"]
+    },
+    "attributes": {
+      "type": "array",
+      "description": "Shippo rate attributes (`attributes`). Advisory ranking flags a platform may use to pre-select or badge an option.",
+      "items": {
+        "type": "string",
+        "enum": ["CHEAPEST", "FASTEST", "BESTVALUE"]
+      }
+    }
+  }
+}
