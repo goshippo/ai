@@ -40,7 +40,7 @@
     "estimated_days": {
       "type": ["integer", "null"],
       "minimum": 0,
-      "description": "Estimated transit time in days (`estimated_days`). Advisory average from the carrier, not binding. Present here as structured data because the dev.ucp.shopping.fulfillment checkout option has no structured delivery-estimate field: at checkout, timing is rendered from `description` (see README caveats).",
+      "description": "Estimated transit time in days (`estimated_days`). Advisory average from the carrier, not binding. This is Shippo's raw integer point estimate; the base UCP option's structured `earliest_fulfillment_time` / `latest_fulfillment_time` are derived from it (see README). Kept here as the un-derived source value for a Shippo-aware platform.",
       "examples": [2]
     },
     "duration_terms": {

@@ -23,6 +23,9 @@ const sample = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'demo', 'sample-shippo-rates.json'), 'utf8')
 );
 
+// Fixed reference ship date so derived fulfillment timestamps are deterministic.
+const SHIP_DATE = '2026-07-10T16:00:00.000Z';
+
 test('toMinorUnits converts USD decimal strings correctly', () => {
   assert.equal(toMinorUnits('5.50', 'USD'), 550);
   assert.equal(toMinorUnits('5.5', 'USD'), 550);
@@ -182,4 +185,117 @@ test('accepts a bare array of rates as well as a {results} envelope', () => {
     lineItemIds: ['li_a'],
   });
   assert.equal(fulfillment.methods[0].groups[0].options.length, 3);
+});
+
+test('base option carries carrier mapped from the Shippo rate.provider', () => {
+  const { fulfillment } = mapRatesToFulfillment(sample, { lineItemIds: ['li_a'] });
+  const opts = fulfillment.methods[0].groups[0].options;
+  assert.equal(opts.find((o) => o.title === 'USPS Priority Mail').carrier, 'USPS');
+  assert.equal(opts.find((o) => o.title === 'UPS Next Day Air').carrier, 'UPS');
+  // carrier is on the base option (readable without the annotation), and
+  // agrees with the annotation's provider.
+  for (const opt of opts) {
+    assert.equal(typeof opt.carrier, 'string');
+    assert.equal(opt.carrier, opt[RATE_DETAIL_KEY].provider);
+  }
+});
+
+test('base option carries deterministic earliest/latest_fulfillment_time from estimated_days', () => {
+  const { fulfillment } = mapRatesToFulfillment(sample, {
+    lineItemIds: ['li_a'],
+    shipmentDate: SHIP_DATE,
+  });
+  const opts = fulfillment.methods[0].groups[0].options;
+
+  // estimated_days 3 -> ship date + 3 calendar days (UTC).
+  const ground = opts.find((o) => o.title === 'USPS Ground Advantage');
+  assert.equal(ground.earliest_fulfillment_time, '2026-07-13T16:00:00.000Z');
+  assert.equal(ground.latest_fulfillment_time, '2026-07-13T16:00:00.000Z');
+
+  // estimated_days 2 and 1.
+  assert.equal(
+    opts.find((o) => o.title === 'USPS Priority Mail').earliest_fulfillment_time,
+    '2026-07-12T16:00:00.000Z'
+  );
+  assert.equal(
+    opts.find((o) => o.title === 'UPS Next Day Air').earliest_fulfillment_time,
+    '2026-07-11T16:00:00.000Z'
+  );
+
+  // RFC 3339 date-time strings, and equal to latest with the default 0-day window.
+  for (const opt of opts) {
+    assert.match(opt.earliest_fulfillment_time, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    assert.equal(opt.earliest_fulfillment_time, opt.latest_fulfillment_time);
+  }
+});
+
+test('deliveryWindowDays pads latest_fulfillment_time only', () => {
+  const { fulfillment } = mapRatesToFulfillment(sample, {
+    lineItemIds: ['li_a'],
+    shipmentDate: SHIP_DATE,
+    deliveryWindowDays: 2,
+  });
+  const ground = fulfillment.methods[0].groups[0].options.find(
+    (o) => o.title === 'USPS Ground Advantage'
+  );
+  assert.equal(ground.earliest_fulfillment_time, '2026-07-13T16:00:00.000Z');
+  assert.equal(ground.latest_fulfillment_time, '2026-07-15T16:00:00.000Z');
+});
+
+test('timing base fields are omitted when the rate has no estimated_days', () => {
+  const noEstimate = {
+    results: [{ ...sample.results[0], estimated_days: null, object_id: 'no_est' }],
+  };
+  const { fulfillment } = mapRatesToFulfillment(noEstimate, {
+    lineItemIds: ['li_a'],
+    shipmentDate: SHIP_DATE,
+  });
+  const opt = fulfillment.methods[0].groups[0].options[0];
+  assert.equal('earliest_fulfillment_time' in opt, false);
+  assert.equal('latest_fulfillment_time' in opt, false);
+  // carrier is independent of timing and is still mapped.
+  assert.equal(opt.carrier, 'USPS');
+});
+
+test('selected_option_id is dropped with a warning when selectedRateId is not an emitted option', () => {
+  const { fulfillment, warnings } = mapRatesToFulfillment(sample, {
+    lineItemIds: ['li_a'],
+    selectedRateId: 'not_a_real_rate_id',
+  });
+  const group = fulfillment.methods[0].groups[0];
+  assert.equal('selected_option_id' in group, false);
+  assert.ok(warnings.some((w) => /not_a_real_rate_id/.test(w)));
+});
+
+test('selected_option_id never references a currency-skipped option', () => {
+  const mixed = {
+    results: [
+      sample.results[0],
+      { ...sample.results[1], currency: 'CAD', object_id: 'cad_rate' },
+    ],
+  };
+  // Point the selection at the rate that gets dropped for a currency mismatch.
+  const { fulfillment, warnings } = mapRatesToFulfillment(mixed, {
+    lineItemIds: ['li_a'],
+    selectedRateId: 'cad_rate',
+  });
+  const group = fulfillment.methods[0].groups[0];
+  assert.equal('selected_option_id' in group, false);
+  assert.ok(warnings.some((w) => /cad_rate/.test(w) && /does not match/.test(w)));
+});
+
+test('every emitted selected_option_id references an option that exists', () => {
+  // Exercise default auto-selection and explicit selection; both must resolve
+  // to an emitted option id or be absent.
+  for (const opts of [{}, { selectedRateId: 'f0e1d2c3b4a5968778695a4b3c2d1e0f' }]) {
+    const { fulfillment } = mapRatesToFulfillment(sample, {
+      lineItemIds: ['li_a'],
+      ...opts,
+    });
+    const group = fulfillment.methods[0].groups[0];
+    if ('selected_option_id' in group) {
+      const ids = group.options.map((o) => o.id);
+      assert.ok(ids.includes(group.selected_option_id));
+    }
+  }
 });

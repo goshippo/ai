@@ -29,9 +29,15 @@ const destination = {
   address_country: 'US',
 };
 
+// A fixed ship date makes the derived earliest/latest_fulfillment_time
+// timestamps on each option reproducible in this demo. A real integration
+// would pass the actual ship/handoff time (the mapper defaults to now).
+const shipmentDate = '2026-07-10T16:00:00.000Z';
+
 const { fulfillment, currency, warnings } = mapRatesToFulfillment(shippoRates, {
   lineItemIds,
   destination,
+  shipmentDate,
 });
 
 // Embed the fulfillment object on a minimal UCP checkout skeleton so the shape
@@ -76,6 +82,12 @@ for (const method of fulfillment.methods) {
       const selected = group.selected_option_id === opt.id ? ' [selected]' : '';
       console.log(`- ${opt.title} - $${price} ${currency}${selected}`);
       console.log(`    ${opt.description.plain}`);
+      if (opt.carrier) console.log(`    carrier: ${opt.carrier}`);
+      if (opt.earliest_fulfillment_time) {
+        console.log(
+          `    fulfillment window: ${opt.earliest_fulfillment_time} to ${opt.latest_fulfillment_time}`
+        );
+      }
     }
   }
 }

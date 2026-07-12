@@ -33,15 +33,19 @@ define a competing fulfillment extension. The correct integration is:
 1. **Implement the existing extension.** A Shippo-backed business populates the
    standard `fulfillment` object on its Checkout. Each Shippo rate becomes one
    fulfillment `option`. This is the primary deliverable: the mapper in `src/`.
-2. **Annotate, in your own namespace, what the base schema does not carry.**
-   The spec says a fulfillment option "is open, so a business MAY annotate it
-   with additional fields." UCP's collision-safe convention for that is
-   reverse-domain naming. So Shippo publishes a companion extension,
-   `com.shippo.shipping.rate_detail`, whose object hangs off each option under
-   the key `com.shippo.shipping.rate_detail` and carries the Shippo `rate_id`,
-   carrier account, servicelevel token, and structured transit estimate. A
-   generic platform ignores the key; a Shippo-aware platform uses it to create
-   the label.
+2. **Annotate, in your own namespace, the Shippo-specific extras the base
+   schema does not carry.** The base option already defines first-class
+   `carrier`, `earliest_fulfillment_time`, and `latest_fulfillment_time`
+   fields, and this adapter populates them, so carrier and timing are readable
+   by any UCP consumer. What the base schema does *not* carry is the Shippo
+   purchase plumbing: the `rate_id`, carrier-account id, servicelevel token,
+   and the raw `estimated_days`. The spec says a fulfillment option "is open,
+   so a business MAY annotate it with additional fields," and UCP's
+   collision-safe convention for that is reverse-domain naming. So Shippo
+   publishes a companion extension, `com.shippo.shipping.rate_detail`, whose
+   object hangs off each option under the key `com.shippo.shipping.rate_detail`.
+   A generic platform ignores the key; a Shippo-aware platform uses it to
+   create the label.
 
 This is a genuine use of UCP's open extension mechanism, not a redefinition of
 the Tech-Council extension.
@@ -54,9 +58,16 @@ the Tech-Council extension.
 | --- | --- | --- |
 | `id` | `object_id` | The rate id doubles as the option id, so a selection round-trips. |
 | `title` | `provider` + `servicelevel.name` | e.g. "USPS Priority Mail". Must distinguish siblings (spec). |
-| `description.plain` | `duration_terms` (+ `provider`) | Renderable string; falls back to `estimated_days`. `description` is an object `{ "plain": "..." }`, per the spec examples. |
+| `carrier` | `provider` | First-class base field on the option (`fulfillment_option.json`). A generic UCP consumer reads the carrier here, without understanding the Shippo annotation. |
+| `description.plain` | `duration_terms` (+ `provider`) | Renderable prose; falls back to `estimated_days`. `description` is an object `{ "plain": "..." }`, per the spec examples. Complements, does not replace, the structured timing fields below. |
+| `earliest_fulfillment_time` | `estimated_days` (+ `shipmentDate`) | Base field, RFC 3339 date-time. Derived deterministically as `shipmentDate` + `estimated_days` calendar days (UTC). Omitted when the rate has no `estimated_days`. |
+| `latest_fulfillment_time` | `estimated_days` (+ `shipmentDate`, `deliveryWindowDays`) | Base field, RFC 3339 date-time. `earliest_fulfillment_time` + `deliveryWindowDays` (default 0, so equal to earliest unless a window is requested). |
 | `totals[]` | `amount` + `currency` | Emitted as `{ "type": "total", "amount": <minor units> }`. `amount` is converted from the decimal string (e.g. `"5.50"` USD to `550`) using the currency's ISO 4217 minor-unit exponent. No `currency` on the total: the UCP checkout root owns `currency`. |
-| `groups[].selected_option_id` | `attributes` | Auto-selects the `BESTVALUE` rate, else `CHEAPEST`, unless the caller passes `selectedRateId`. |
+| `groups[].selected_option_id` | `attributes` | Auto-selects the `BESTVALUE` rate, else `CHEAPEST`, unless the caller passes `selectedRateId`. A selection that is not among the emitted options is dropped with a warning, never left as a dangling reference. |
+
+Option-level `totals[]` are the per-option shipping cost only. They are distinct
+from the checkout-level totals and constraints, which own the order's grand total
+(items + shipping + tax); this mapper does not compute or touch those.
 
 ### Shippo Rate to `com.shippo.shipping.rate_detail` (annotation, used by Shippo-aware platforms)
 
@@ -68,7 +79,7 @@ the Tech-Council extension.
 | `servicelevel_token` | `servicelevel.token` | Stable machine service id. |
 | `servicelevel_name` | `servicelevel.name` | Human service name. |
 | `servicelevel_terms` | `servicelevel.terms` | Carrier terms (often empty). |
-| `estimated_days` | `estimated_days` | **Structured** transit estimate. The base checkout option has no structured estimate field (see caveats), so it lives here. |
+| `estimated_days` | `estimated_days` | Shippo's raw integer point estimate, preserved verbatim. The base option's structured timing (`earliest_fulfillment_time` / `latest_fulfillment_time`) is derived from this; the annotation keeps the un-derived source value for a Shippo-aware platform. |
 | `duration_terms` | `duration_terms` | Source phrase folded into `description.plain`. |
 | `arrives_by` | `arrives_by` | Local arrival time when the carrier provides it. |
 | `zone` | `zone` | Carrier rating zone. |
@@ -168,14 +179,20 @@ under their own domain ... without UCP maintainer approval", core concepts).
   reference builds to the **newer, documented spec**. If you validate against
   the older fixture schema it will not match. This drift is the clearest signal
   of the protocol's maturity.
-- **The checkout delivery-estimate "slot" is a rendered string, not a
-  structured object (in this version).** The older shape had a structured
-  `estimated_days: { min, max }` on the option; the current checkout option has
-  no structured estimate field, and the spec conveys timing through the
-  human-readable `description` (e.g. "Arrives Dec 12-15 via USPS"). This adapter
-  therefore puts timing into `description.plain` and exposes the structured
-  `estimated_days` **only** in the `com.shippo.shipping.rate_detail` annotation.
-  We did not invent a structured estimate field on the base option.
+- **Timing on the base option is structured, derived, and not a guarantee.**
+  The current fulfillment option defines first-class `carrier`,
+  `earliest_fulfillment_time`, and `latest_fulfillment_time` fields
+  (`fulfillment_option.json`), and this adapter maps all three: `carrier` from
+  the rate `provider`, and the two timestamps derived deterministically from
+  the rate's single `estimated_days` point estimate (`shipmentDate` +
+  `estimated_days` calendar days, plus `deliveryWindowDays` for the latest).
+  Because Shippo returns one integer, not a window, `earliest` and `latest` are
+  equal by default; pass `deliveryWindowDays` to widen. The math is calendar
+  days in UTC, not carrier business days, so treat the timestamps as
+  day-granular estimates, not delivery guarantees. `description.plain` still
+  carries the human-readable phrase for direct rendering, and the raw integer
+  `estimated_days` is preserved in the `com.shippo.shipping.rate_detail`
+  annotation.
 - **The open-annotation key convention is inferred, not spelled out.** The spec
   states the option "is open, so a business MAY annotate it with additional
   fields," and core concepts require reverse-domain naming for collision-safe
@@ -185,9 +202,10 @@ under their own domain ... without UCP maintainer approval", core concepts).
   consistent with UCP's provenance rules. Confirm the placement convention with
   the UCP maintainers before relying on it in production.
 - **Schema field names in `rate_detail.schema.json` are Shippo's, not UCP's.**
-  Only the base option fields (`id`, `title`, `description`, `totals`,
-  `selected_option_id`) are defined by UCP. Everything under the annotation key
-  is defined by this reference and is subject to change.
+  The base option fields UCP itself defines (`id`, `title`, `description`,
+  `carrier`, `earliest_fulfillment_time`, `latest_fulfillment_time`, `totals`,
+  and the group's `selected_option_id`) are the standard contract. Everything
+  under the annotation key is defined by this reference and is subject to change.
 - **Money precision.** Amounts are converted to integer minor units using ISO
   4217 exponents. The lookup table covers common zero- and three-decimal
   currencies and defaults to 2; extend `MINOR_UNIT_EXPONENT` if you ship

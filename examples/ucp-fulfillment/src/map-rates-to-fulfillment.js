@@ -6,6 +6,10 @@
  *
  * Primary sources (verified, see README):
  *   - UCP fulfillment spec: https://ucp.dev/2026-04-08/specification/fulfillment
+ *   - UCP fulfillment option schema (base option fields carrier /
+ *     earliest_fulfillment_time / latest_fulfillment_time / totals, composed
+ *     over fulfillment_option_base.json id / title / description):
+ *     https://github.com/Universal-Commerce-Protocol/ucp/blob/main/source/schemas/shopping/types/fulfillment_option.json
  *   - UCP core concepts / namespace governance:
  *     https://github.com/Universal-Commerce-Protocol/ucp/blob/main/docs/documentation/core-concepts.md
  *   - Shippo Rate object:
@@ -16,6 +20,12 @@
 
 // Reverse-domain key under which each option carries Shippo-native detail.
 const RATE_DETAIL_KEY = 'com.shippo.shipping.rate_detail';
+
+// One fixed-length UTC day in milliseconds. Timing estimates add whole
+// multiples of this to the ship date, the same deterministic approach the
+// companion ACP adapter uses: UTC math immune to DST wall-clock shifts, at the
+// cost of modeling calendar days rather than carrier business days.
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // ISO 4217 minor-unit exponents that differ from the default of 2.
 // Source: ISO 4217. Only the common non-2 cases are enumerated; everything
@@ -81,11 +91,12 @@ function firstDefined(...vals) {
 }
 
 /**
- * Build the renderable `description.plain` for an option. The current UCP
- * checkout option has no structured delivery-estimate field, so timing is
- * conveyed as human-readable text (matching the spec's own examples, e.g.
- * "Arrives Dec 12-15 via USPS"). We prefer Shippo's own `duration_terms`
- * phrase and fall back to synthesizing one from `estimated_days`.
+ * Build the renderable `description.plain` for an option. `description` is the
+ * spec's directly-renderable prose slot (its own examples read like "Arrives
+ * Dec 12-15 via USPS"). It complements, and does not replace, the structured
+ * base fields carrier / earliest_fulfillment_time / latest_fulfillment_time
+ * that this mapper also sets. We prefer Shippo's own `duration_terms` phrase
+ * and fall back to synthesizing one from `estimated_days`.
  */
 function buildDescriptionPlain(rate) {
   const provider = rate.provider ? String(rate.provider) : undefined;
@@ -117,10 +128,58 @@ function buildTitle(rate) {
 }
 
 /**
+ * Derive the base option timing window (earliest_fulfillment_time /
+ * latest_fulfillment_time, both RFC 3339 date-time) from Shippo's single
+ * `estimated_days` point estimate. Returns undefined when Shippo gave no
+ * estimate, since both fields are optional on the UCP fulfillment option.
+ *
+ * Deterministic and day-based, the same approach the companion ACP adapter
+ * uses: add `estimated_days` fixed 24h UTC days to `shipmentDate` for the
+ * earliest time, then `deliveryWindowDays` more for the latest. With the
+ * default window of 0 the two are equal (a point estimate, not a range). These
+ * are calendar days, not carrier business days: no weekend, holiday, or cutoff
+ * modeling is applied. For business-day accuracy, compute the dates upstream
+ * and pass a `shipmentDate` that reflects real handling time.
+ *
+ * @param {Object} rate Shippo rate.
+ * @param {Object} opts { shipmentDate, deliveryWindowDays }.
+ * @returns {{ earliest_fulfillment_time: string, latest_fulfillment_time: string }|undefined}
+ */
+function deriveFulfillmentWindow(rate, opts) {
+  const days = rate.estimated_days;
+  if (days == null) return undefined;
+  if (!Number.isInteger(days) || days < 0) {
+    throw new TypeError(
+      `estimated_days must be a non-negative integer, got ${JSON.stringify(days)}`
+    );
+  }
+  const base =
+    opts.shipmentDate === undefined ? new Date() : new Date(opts.shipmentDate);
+  if (Number.isNaN(base.getTime())) {
+    throw new TypeError(
+      `Invalid shipmentDate: ${JSON.stringify(opts.shipmentDate)}`
+    );
+  }
+  const windowDays =
+    opts.deliveryWindowDays == null ? 0 : opts.deliveryWindowDays;
+  if (!Number.isInteger(windowDays) || windowDays < 0) {
+    throw new TypeError(
+      `deliveryWindowDays must be a non-negative integer, got ${JSON.stringify(windowDays)}`
+    );
+  }
+  const earliest = new Date(base.getTime() + days * MS_PER_DAY);
+  const latest = new Date(earliest.getTime() + windowDays * MS_PER_DAY);
+  return {
+    earliest_fulfillment_time: earliest.toISOString(),
+    latest_fulfillment_time: latest.toISOString(),
+  };
+}
+
+/**
  * Map a single Shippo rate into a UCP fulfillment option (base fields) plus the
  * com.shippo.shipping.rate_detail annotation.
  */
-function rateToOption(rate, currency) {
+function rateToOption(rate, currency, opts = {}) {
   const amountMinor = toMinorUnits(rate.amount, currency);
 
   const servicelevel = rate.servicelevel || {};
@@ -146,8 +205,21 @@ function rateToOption(rate, currency) {
     title: buildTitle(rate),
     description: { plain: buildDescriptionPlain(rate) },
     totals: [{ type: 'total', amount: amountMinor }],
-    [RATE_DETAIL_KEY]: detail,
   };
+
+  // Base option fields defined by dev.ucp.shopping.fulfillment itself (see
+  // fulfillment_option.json: `carrier`, `earliest_fulfillment_time`,
+  // `latest_fulfillment_time`). A generic UCP consumer reads carrier and
+  // timing straight from the base option, without understanding the
+  // com.shippo.* annotation below.
+  if (rate.provider) option.carrier = String(rate.provider);
+  const window = deriveFulfillmentWindow(rate, opts);
+  if (window) Object.assign(option, window);
+
+  // Shippo-only extras (rate_id, carrier_account, servicelevel_token,
+  // structured estimated_days, ...) a Shippo-aware platform needs to buy the
+  // label. Kept under the reverse-domain key; a generic consumer ignores it.
+  option[RATE_DETAIL_KEY] = detail;
 
   return option;
 }
@@ -163,7 +235,15 @@ function rateToOption(rate, currency) {
  * @property {string} [groupId]          Id for the generated group. Default "package_1".
  * @property {string} [selectedRateId]   Shippo object_id to mark as selected_option_id. If
  *                                       omitted, the BESTVALUE (else CHEAPEST) rate is selected;
- *                                       if neither attribute is present, none is selected.
+ *                                       if neither attribute is present, none is selected. A
+ *                                       selection that does not match an emitted option is
+ *                                       dropped with a warning (never a dangling reference).
+ * @property {Date|string|number} [shipmentDate] Reference ship date used to derive each option's
+ *                                       earliest_fulfillment_time / latest_fulfillment_time from
+ *                                       the rate's estimated_days. Defaults to now.
+ * @property {number} [deliveryWindowDays] Extra calendar days added to latest_fulfillment_time
+ *                                       beyond the estimated_days point estimate, to present an
+ *                                       honest range. Default 0 (earliest equals latest).
  */
 
 /**
@@ -219,12 +299,19 @@ function mapRatesToFulfillment(shippoRates, opts) {
     usable.push(rate);
   }
 
-  const options = usable.map((rate) => rateToOption(rate, currency));
+  const options = usable.map((rate) => rateToOption(rate, currency, opts));
+  const emittedIds = new Set(options.map((o) => o.id));
 
   // Resolve which option is selected.
   let selectedOptionId;
   if (opts.selectedRateId) {
-    selectedOptionId = opts.selectedRateId;
+    if (emittedIds.has(opts.selectedRateId)) {
+      selectedOptionId = opts.selectedRateId;
+    } else {
+      warnings.push(
+        `selectedRateId ${opts.selectedRateId} does not match any emitted option; leaving selection unset.`
+      );
+    }
   } else {
     const byAttr = (attr) =>
       usable.find((r) => Array.isArray(r.attributes) && r.attributes.includes(attr));
@@ -237,7 +324,10 @@ function mapRatesToFulfillment(shippoRates, opts) {
     line_item_ids: opts.lineItemIds.slice(),
     options,
   };
-  if (selectedOptionId) group.selected_option_id = selectedOptionId;
+  // Guard: selected_option_id must reference an option we actually emitted.
+  if (selectedOptionId && emittedIds.has(selectedOptionId)) {
+    group.selected_option_id = selectedOptionId;
+  }
 
   const method = {
     id: opts.methodId || 'shipping',
