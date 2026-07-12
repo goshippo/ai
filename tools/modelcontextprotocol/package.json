@@ -1,0 +1,24 @@
+{
+  "name": "@shippo/shippo-mcp",
+  "version": "3.0.0",
+  "description": "Multi-carrier shipping for AI agents: compare rates, buy labels, track packages, validate addresses. Local bridge to the hosted Shippo MCP server.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "shippo-mcp": "dist/index.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "tsup",
+    "test": "node --import tsx --test test/*.test.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}
