@@ -85,6 +85,10 @@
  *   2026-04-17 `totals` breakdown. Default 'Shipping'.
  */
 
+// One fixed-length UTC day. Delivery estimates add whole multiples of this to
+// the ship timestamp (see deliveryEstimate). Using UTC milliseconds keeps the
+// output deterministic and immune to DST wall-clock shifts, at the cost of
+// modeling calendar days rather than carrier business days.
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // ISO 4217 currencies with a non-2 minor-unit exponent. Everything else uses 2.
@@ -96,13 +100,37 @@ const ZERO_DECIMAL = new Set([
 const THREE_DECIMAL = new Set(['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND']);
 
 /**
+ * Validate an ISO 4217 alphabetic currency code (three ASCII letters) and
+ * return it upper-cased. Throws a clear TypeError otherwise.
+ *
+ * This is the guard for the missing-currency case: a Shippo rate that lacks
+ * `currency` would otherwise stringify to "UNDEFINED", miss both exponent
+ * sets, and silently price the option with a default 2-decimal exponent while
+ * surfacing a bogus "UNDEFINED" settlement currency. Failing loudly here is
+ * safer than emitting a malformed ACP option.
+ *
+ * @param {unknown} currency
+ * @returns {string}
+ */
+function normalizeCurrency(currency) {
+  if (typeof currency !== 'string' || !/^[A-Za-z]{3}$/.test(currency)) {
+    throw new TypeError(
+      `Expected a 3-letter ISO 4217 currency code, got ${JSON.stringify(currency)}`
+    );
+  }
+  return currency.toUpperCase();
+}
+
+/**
  * Minor-unit exponent for an ISO 4217 currency code (2 unless listed above).
+ * Throws a clear TypeError on a missing or malformed code (see
+ * {@link normalizeCurrency}).
  *
  * @param {string} currency
  * @returns {number}
  */
 function currencyExponent(currency) {
-  const code = String(currency).toUpperCase();
+  const code = normalizeCurrency(currency);
   if (ZERO_DECIMAL.has(code)) return 0;
   if (THREE_DECIMAL.has(code)) return 3;
   return 2;
@@ -141,6 +169,20 @@ function toMinorUnits(amount, currency) {
  * Derive RFC 3339 delivery-estimate timestamps from Shippo's single
  * `estimated_days` point estimate. Returns null when Shippo did not provide
  * an estimate (both timestamp fields are optional in the ACP spec).
+ *
+ * Approximation, stated plainly so callers do not over-read the output:
+ *   - `estimated_days` is a whole-day point estimate. This function adds
+ *     `days` fixed 24h UTC days to `shipmentDate` for `earliest_delivery_time`,
+ *     then `deliveryWindowDays` more for `latest_delivery_time`. With the
+ *     default window of 0 the two timestamps are equal: a point, not a range.
+ *   - Days are calendar days, not carrier business days, and no weekend,
+ *     holiday, carrier-cutoff, or time-zone/DST modeling is applied. The
+ *     result is a deterministic UTC estimate, not a delivery guarantee.
+ *   - The output inherits the time-of-day of `shipmentDate`, so its sub-day
+ *     precision is not meaningful; treat it as day-granular. Pass a
+ *     `shipmentDate` that reflects real handling time, and widen with
+ *     `deliveryWindowDays` to present an honest range.
+ * For business-day accuracy, compute the dates upstream and pass them in.
  *
  * @param {ShippoRate} rate
  * @param {ConvertOptions} options
@@ -263,9 +305,9 @@ function ratesToFulfillmentOptions(input, options = {}) {
   if (rates.length === 0) {
     throw new RangeError('No rates to convert; check the shipment for messages explaining why no rates returned');
   }
-  const currency = String(rates[0].currency).toUpperCase();
+  const currency = normalizeCurrency(rates[0].currency);
   for (const rate of rates) {
-    if (String(rate.currency).toUpperCase() !== currency) {
+    if (normalizeCurrency(rate.currency) !== currency) {
       throw new RangeError(
         `Mixed currencies in rates (${currency} vs ${rate.currency}); an ACP checkout session has a single settlement currency`
       );
@@ -282,4 +324,5 @@ module.exports = {
   ratesToFulfillmentOptions,
   toMinorUnits,
   currencyExponent,
+  normalizeCurrency,
 };

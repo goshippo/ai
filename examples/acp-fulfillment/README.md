@@ -60,8 +60,9 @@ Honest gaps you must cover in a production integration:
 
 * **Tax.** Shippo rates are pre-tax carrier prices. The 2025-09-29 shape requires a `tax` field, which the adapter sets to `0` with `total = subtotal`. If your jurisdiction taxes shipping, compute it in your tax engine and adjust before returning the option.
 * **Delivery windows.** Shippo returns a single `estimated_days` point estimate, not a range. By default `earliest_delivery_time` equals `latest_delivery_time`; pass `deliveryWindowDays` to widen the range honestly. Some carrier services return no `estimated_days` at all, in which case both timestamps are omitted (they are optional in every ACP version).
+* **Delivery-time precision.** The timestamps are `shipmentDate` plus whole fixed-length 24h UTC days. That keeps the output deterministic and DST-independent, but it is a day-granular estimate, not a minute-accurate one: the result inherits the time-of-day of `shipmentDate`, so do not read meaning into its sub-day precision. The math models calendar days, not carrier business days, and applies no weekend, holiday, or carrier-cutoff logic. For business-day accuracy, compute the dates upstream and pass them in.
 * **Ship date.** `estimated_days` counts from when the parcel ships, not from checkout. Pass `shipmentDate` reflecting your real handling time; the default is "now".
-* **Currency.** ACP prices the whole session in one settlement currency. The adapter throws on mixed-currency rate lists and returns the detected `currency` so you can assert it matches the session.
+* **Currency.** ACP prices the whole session in one settlement currency. The adapter requires every rate to carry a valid 3-letter ISO 4217 `currency` code: a missing or malformed code throws a clear `TypeError` rather than silently producing an "UNDEFINED" currency priced at a default 2-decimal exponent. It also throws on mixed-currency rate lists and returns the detected `currency` so you can assert it matches the session.
 * **Business days.** `estimated_days` is calendar-added here. Carrier estimates are usually business days; adjust if the distinction matters for your promise dates.
 
 ## Related protocols

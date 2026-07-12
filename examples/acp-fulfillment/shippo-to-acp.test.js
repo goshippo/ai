@@ -11,6 +11,7 @@ const {
   ratesToFulfillmentOptions,
   toMinorUnits,
   currencyExponent,
+  normalizeCurrency,
 } = require('./shippo-to-acp');
 
 const SHIP_DATE = '2026-07-10T16:00:00.000Z';
@@ -58,6 +59,32 @@ test('toMinorUnits rejects malformed amounts', () => {
   assert.throws(() => toMinorUnits(5.5, 'USD'), TypeError);
 });
 
+test('normalizeCurrency accepts valid ISO 4217 codes and rejects missing or malformed ones', () => {
+  assert.equal(normalizeCurrency('USD'), 'USD');
+  assert.equal(normalizeCurrency('usd'), 'USD');
+  // A missing currency must fail loudly, not become "UNDEFINED".
+  // @ts-expect-error deliberate wrong type
+  assert.throws(() => normalizeCurrency(undefined), TypeError);
+  assert.throws(() => normalizeCurrency(''), TypeError);
+  assert.throws(() => normalizeCurrency('US'), TypeError);
+  assert.throws(() => normalizeCurrency('DOLLAR'), TypeError);
+  // @ts-expect-error deliberate wrong type
+  assert.throws(() => normalizeCurrency(840), TypeError);
+});
+
+test('a rate missing currency throws early instead of emitting an "UNDEFINED" currency', () => {
+  // currencyExponent is the choke point that toMinorUnits routes through.
+  // @ts-expect-error deliberate wrong type
+  assert.throws(() => currencyExponent(undefined), TypeError);
+  assert.throws(() => rateToFulfillmentOption(sampleRate({ currency: undefined })), TypeError);
+  assert.throws(() => rateToFulfillmentOption(sampleRate({ currency: '' })), TypeError);
+  // The whole-list entry point must reject it too, before any "UNDEFINED"
+  // currency can be returned to the caller.
+  const bad = ratesToFulfillmentOptions;
+  assert.throws(() => bad([sampleRate({ currency: undefined })]), TypeError);
+  assert.throws(() => bad({ rates: [sampleRate({ currency: undefined })] }), TypeError);
+});
+
 test('rateToFulfillmentOption emits the 2026-04-17 shape by default', () => {
   const option = rateToFulfillmentOption(sampleRate(), { shipmentDate: SHIP_DATE });
   assert.deepEqual(option, {
@@ -99,6 +126,28 @@ test('deliveryWindowDays pads latest_delivery_time only', () => {
   });
   assert.equal(option.earliest_delivery_time, '2026-07-12T16:00:00.000Z');
   assert.equal(option.latest_delivery_time, '2026-07-15T16:00:00.000Z');
+});
+
+test('delivery estimate adds fixed 24h UTC days: deterministic and DST-independent', () => {
+  // US spring-forward is 2026-03-08. Because the math is fixed-length UTC days
+  // (not wall-clock local days), crossing that boundary does not skew the
+  // result: 3 days from 2026-03-06T16:00Z is exactly 2026-03-09T16:00Z, and
+  // the estimate carries the ship time-of-day (it is day-granular, not
+  // minute-accurate). This pins the documented approximation.
+  const option = rateToFulfillmentOption(sampleRate({ estimated_days: 3 }), {
+    shipmentDate: '2026-03-06T16:00:00.000Z',
+    deliveryWindowDays: 0,
+  });
+  assert.equal(option.earliest_delivery_time, '2026-03-09T16:00:00.000Z');
+  assert.equal(option.latest_delivery_time, '2026-03-09T16:00:00.000Z');
+});
+
+test('a zero-day estimate lands on the ship instant, not the next calendar day', () => {
+  const option = rateToFulfillmentOption(sampleRate({ estimated_days: 0 }), {
+    shipmentDate: SHIP_DATE,
+  });
+  assert.equal(option.earliest_delivery_time, SHIP_DATE);
+  assert.equal(option.latest_delivery_time, SHIP_DATE);
 });
 
 test('optional fields are omitted when Shippo does not populate them', () => {
