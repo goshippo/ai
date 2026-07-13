@@ -6,13 +6,13 @@ Local bridge to the hosted [Shippo MCP server](https://docs.goshippo.com/docs/Gu
 
 OAuth (opens a browser to sign in to Shippo):
 
-```
+```sh
 npx -y @shippo/shippo-mcp
 ```
 
 API key (headless, CI, or test mode):
 
-```
+```sh
 npx -y @shippo/shippo-mcp --api-key=shippo_test_XXXX
 ```
 
