@@ -33,8 +33,8 @@ export async function runBridge(opts: BridgeOptions): Promise<void> {
   const closeCounterpart = (other: Transportish | undefined): void => {
     if (closed) return;
     closed = true;
-    // close() may return a rejected promise (or throw synchronously); normalize
-    // and swallow it so a shutdown never surfaces as an unhandled rejection.
+    // close() returns a promise (Transportish contract); swallow a rejection so
+    // a shutdown never surfaces as an unhandled rejection.
     if (other) {
       void Promise.resolve(other.close()).catch(() => {});
     }
