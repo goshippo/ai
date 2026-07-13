@@ -31,14 +31,20 @@ export function buildApiKeyHeaders(
   return headers;
 }
 
-export function defaultOpenBrowser(url: string): void {
+export function defaultOpenBrowser(url: string, command?: string): void {
   const cmd =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+    command ??
+    (process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open');
   const child = spawn(cmd, [url], {
     stdio: 'ignore',
     detached: true,
     shell: process.platform === 'win32',
   });
+  child.on('error', (err) =>
+    process.stderr.write(
+      `[shippo-mcp] could not open a browser automatically (${err.message}). Open this URL manually: ${url}\n`,
+    ),
+  );
   child.unref();
 }
 
@@ -97,7 +103,7 @@ export class ShippoOAuthProvider implements OAuthClientProvider {
 // Starts the loopback server, returns the chosen port plus a promise that
 // resolves with the authorization code when the callback is hit.
 export function startCallbackServer(): Promise<{ port: number; code: Promise<string> }> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let resolveCode!: (code: string) => void;
     let rejectCode!: (err: Error) => void;
     const code = new Promise<string>((res, rej) => {
@@ -119,6 +125,7 @@ export function startCallbackServer(): Promise<{ port: number; code: Promise<str
       else if (c) resolveCode(c);
       else rejectCode(new Error('Authorization callback missing the code.'));
     });
+    server.on('error', reject);
     server.listen(0, 'localhost', () => {
       const addr = server.address();
       const port = typeof addr === 'object' && addr ? addr.port : 0;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildApiKeyHeaders, ShippoOAuthProvider } from '../src/auth.ts';
+import { buildApiKeyHeaders, defaultOpenBrowser, ShippoOAuthProvider } from '../src/auth.ts';
 import { FileStore } from '../src/store.ts';
 
 test('api key becomes a Bearer header', () => {
@@ -50,4 +50,13 @@ test('redirectToAuthorization opens the browser with the authorize url', () => {
   });
   p.redirectToAuthorization(new URL('https://auth.example/authorize?x=1'));
   assert.equal(opened, 'https://auth.example/authorize?x=1');
+});
+
+test('defaultOpenBrowser does not crash the process when the opener binary is missing', async () => {
+  // A command that does not exist emits an async 'error' on the child. If it
+  // were unhandled, Node would throw and crash this test process. Reaching the
+  // assertion means the error handler swallowed it.
+  defaultOpenBrowser('https://example.test/', 'shippo-no-such-opener-xyz-9999');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.ok(true);
 });
