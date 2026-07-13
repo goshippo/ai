@@ -132,6 +132,11 @@ export function startCallbackServer(): Promise<{ port: number; code: Promise<str
       const port = typeof addr === 'object' && addr ? addr.port : 0;
       resolve({ port, code });
     });
+    // Do not let the idle callback listener hold the event loop: if the client
+    // closes stdin before sign-in starts, the bridge must drain and exit. While
+    // a real sign-in is in progress, open stdin keeps the process alive, so an
+    // unref'd server still serves the callback.
+    server.unref();
   });
 }
 

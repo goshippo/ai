@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { buildApiKeyHeaders, defaultOpenBrowser, ShippoOAuthProvider } from '../src/auth.ts';
 import { FileStore } from '../src/store.ts';
 
@@ -72,4 +73,20 @@ test('headless with no key throws a clear, actionable error', () => {
 
 test('api-key mode never requires a browser', () => {
   assert.doesNotThrow(() => assertBrowserCapable({ authMode: 'apiKey' } as any, { CI: 'true' }));
+});
+
+test('an idle oauth callback server does not keep the process alive', () => {
+  // A process that only starts the callback server must drain and exit once
+  // nothing else holds the loop (the case: stdin already at EOF before
+  // sign-in). The unref() in startCallbackServer is what makes this pass.
+  const res = spawnSync(
+    process.execPath,
+    [
+      '--import', 'tsx', '--input-type=module', '-e',
+      "const { startCallbackServer } = await import('./src/auth.ts'); await startCallbackServer();",
+    ],
+    { cwd: new URL('..', import.meta.url).pathname, timeout: 8000, encoding: 'utf8' },
+  );
+  assert.equal(res.signal, null, `killed by ${res.signal}; should exit on its own. stderr: ${res.stderr}`);
+  assert.equal(res.status, 0, `expected clean exit, got ${res.status}. stderr: ${res.stderr}`);
 });
