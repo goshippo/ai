@@ -12,6 +12,7 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { FileStore } from './store.ts';
 import { PKG_NAME, PKG_VERSION } from './version.ts';
+import type { Config } from './cli.ts';
 
 export interface AuthContext {
   headers: Record<string, string>;
@@ -136,4 +137,30 @@ export function startCallbackServer(): Promise<{ port: number; code: Promise<str
 
 export function defaultCacheDir(): string {
   return joinPath(homedir(), '.shippo-mcp');
+}
+
+export function assertBrowserCapable(config: Config, env: NodeJS.ProcessEnv): void {
+  if (config.authMode === 'apiKey') return;
+  const headless = !!env.CI || (!process.stdout.isTTY && !env.DISPLAY && process.platform === 'linux');
+  if (headless) {
+    throw new Error(
+      'OAuth needs a browser and none is available. Pass --api-key (or set SHIPPO_API_KEY) for headless or CI use.',
+    );
+  }
+}
+
+export interface OAuthSetup {
+  provider: ShippoOAuthProvider;
+  authCode: Promise<string>;
+}
+
+// Starts the loopback server, then builds a provider bound to its port.
+export async function setupOAuth(
+  host: string,
+  deps: { store?: FileStore; openBrowser?: (url: string) => void } = {},
+): Promise<OAuthSetup> {
+  const { port, code } = await startCallbackServer();
+  const store = deps.store ?? new FileStore(defaultCacheDir(), host);
+  const provider = new ShippoOAuthProvider(store, port, deps.openBrowser ?? defaultOpenBrowser);
+  return { provider, authCode: code };
 }

@@ -60,3 +60,16 @@ test('defaultOpenBrowser does not crash the process when the opener binary is mi
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.ok(true);
 });
+
+import { assertBrowserCapable } from '../src/auth.ts';
+
+test('headless with no key throws a clear, actionable error', () => {
+  assert.throws(
+    () => assertBrowserCapable({ authMode: 'oauth' } as any, { CI: 'true' }),
+    /pass --api-key/i,
+  );
+});
+
+test('api-key mode never requires a browser', () => {
+  assert.doesNotThrow(() => assertBrowserCapable({ authMode: 'apiKey' } as any, { CI: 'true' }));
+});
