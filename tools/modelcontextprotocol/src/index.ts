@@ -1,12 +1,31 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
-import { parseConfig } from './cli.ts';
-import { buildApiKeyHeaders, assertBrowserCapable, setupOAuth } from './auth.ts';
+import { parseConfig, USAGE } from './cli.ts';
+import {
+  buildApiKeyHeaders,
+  assertBrowserCapable,
+  setupOAuth,
+  isHttp401,
+  KEY_DOOR_401_MESSAGE,
+} from './auth.ts';
 import { runBridge, type Transportish } from './bridge.ts';
+import { PKG_VERSION } from './version.ts';
 
 export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<void> {
   const config = parseConfig(argv, env);
+
+  // --help / --version run instead of the MCP mode and are the only sanctioned
+  // writers to stdout; everything else keeps stdout a pure MCP channel.
+  if (config.help) {
+    process.stdout.write(USAGE);
+    process.exit(0);
+  }
+  if (config.version) {
+    process.stdout.write(`${PKG_VERSION}\n`);
+    process.exit(0);
+  }
+
   assertBrowserCapable(config, env);
   const url = new URL(config.url);
 
@@ -16,13 +35,30 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<void
     const headers = buildApiKeyHeaders(config.apiKey!, config.shippoAccount);
     await runBridge({
       downstream,
-      makeUpstream: (userAgent) =>
-        new StreamableHTTPClientTransport(url, {
+      makeUpstream: (userAgent) => {
+        const t = new StreamableHTTPClientTransport(url, {
           requestInit: { headers: { ...headers, 'User-Agent': userAgent } },
-        }) as unknown as Transportish,
+        });
+        // The spec promises a friendly message when the hosted key door turns a
+        // key away (or is not yet enabled). Translate a 401 into that guidance;
+        // every other error passes through untouched.
+        const wrap =
+          <A extends unknown[]>(fn: (...args: A) => Promise<void>) =>
+          async (...args: A): Promise<void> => {
+            try {
+              await fn(...args);
+            } catch (e) {
+              if (isHttp401(e)) throw new Error(KEY_DOOR_401_MESSAGE);
+              throw e;
+            }
+          };
+        t.start = wrap(t.start.bind(t));
+        t.send = wrap(t.send.bind(t)) as typeof t.send;
+        return t as unknown as Transportish;
+      },
     });
   } else {
-    const { provider, authCode } = await setupOAuth(url.host);
+    const { provider, authCode } = await setupOAuth(url.host, { callbackPort: config.callbackPort });
     await runBridge({
       downstream,
       makeUpstream: (userAgent) => {
@@ -42,8 +78,19 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<void
           (completion ??= (async () => {
             const code = await authCode;
             await t.finishAuth(code);
-          })());
-        const wrap = <A extends unknown[]>(fn: (...args: A) => Promise<void>) =>
+          })().catch((err: unknown) => {
+            // A denied or errored sign-in must not be swallowed by the bridge's
+            // per-message catch and leave a zombie that never authenticates.
+            // Exiting here guarantees the rejection is terminal.
+            process.stderr.write(
+              `[shippo-mcp] sign-in failed or was denied: ${
+                err instanceof Error ? err.message : String(err)
+              }. Restart the bridge to try again.\n`,
+            );
+            process.exit(1);
+          }));
+        const wrap =
+          <A extends unknown[]>(fn: (...args: A) => Promise<void>) =>
           async (...args: A): Promise<void> => {
             try {
               await fn(...args);
@@ -63,7 +110,10 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<void
     });
   }
 
-  const shutdown = () => { void downstream.close(); process.exit(0); };
+  const shutdown = () => {
+    void downstream.close();
+    process.exit(0);
+  };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 }

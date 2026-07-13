@@ -35,3 +35,39 @@ test('rejects a malformed api key', () => {
 test('captures --shippo-account', () => {
   assert.equal(parseConfig(['--shippo-account=abc123'], {}).shippoAccount, 'abc123');
 });
+
+test('captures --callback-port as an integer', () => {
+  assert.equal(parseConfig(['--callback-port=8080'], {}).callbackPort, 8080);
+});
+
+test('rejects a non-integer or out-of-range --callback-port', () => {
+  assert.throws(() => parseConfig(['--callback-port=abc'], {}), /callback-port/);
+  assert.throws(() => parseConfig(['--callback-port=80'], {}), /1024 and 65535/);
+  assert.throws(() => parseConfig(['--callback-port=70000'], {}), /1024 and 65535/);
+});
+
+test('rejects an empty value-bearing flag (bare, =empty, or space-separated)', () => {
+  assert.throws(() => parseConfig(['--api-key'], {}), /Missing value for --api-key/);
+  assert.throws(() => parseConfig(['--api-key='], {}), /Missing value for --api-key/);
+  assert.throws(() => parseConfig(['--url'], {}), /Missing value for --url/);
+  // space-separated: the flag lands empty and the value becomes a positional;
+  // the empty-value guard fires first with the more specific message.
+  assert.throws(() => parseConfig(['--api-key', 'shippo_test_x'], {}), /Missing value for --api-key/);
+});
+
+test('rejects an unknown flag with usage guidance', () => {
+  assert.throws(() => parseConfig(['--nope=1'], {}), /Unknown flag --nope/);
+  assert.throws(() => parseConfig(['--nope=1'], {}), /--help for usage/);
+});
+
+test('rejects a stray positional with usage guidance', () => {
+  assert.throws(() => parseConfig(['whoops'], {}), /Unexpected argument "whoops"/);
+  assert.throws(() => parseConfig(['whoops'], {}), /--help for usage/);
+});
+
+test('--help and --version set discriminants and short-circuit validation', () => {
+  assert.equal(parseConfig(['--help'], {}).help, true);
+  assert.equal(parseConfig(['--version'], {}).version, true);
+  // help wins even alongside an otherwise-invalid flag
+  assert.equal(parseConfig(['--help', '--nonsense'], {}).help, true);
+});

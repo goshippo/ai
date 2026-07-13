@@ -19,3 +19,12 @@ test('different hosts do not collide', () => {
   const dev = new FileStore(dir, 'mcp.shippodev.com');
   assert.equal(dev.read('tokens'), undefined);
 });
+
+test('delete removes a key and is a no-op when the key is missing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'shippo-store-'));
+  const store = new FileStore(dir, 'mcp.shippo.com');
+  store.write('tokens', { access_token: 'a' });
+  store.delete('tokens');
+  assert.equal(store.read('tokens'), undefined);
+  assert.doesNotThrow(() => store.delete('tokens'));
+});

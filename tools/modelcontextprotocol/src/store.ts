@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
@@ -21,5 +21,14 @@ export class FileStore {
 
   write(key: string, value: unknown): void {
     writeFileSync(join(this.dir, `${key}.json`), JSON.stringify(value), { mode: 0o600 });
+  }
+
+  delete(key: string): void {
+    try {
+      unlinkSync(join(this.dir, `${key}.json`));
+    } catch (e) {
+      // A missing key is already in the desired state; only real errors bubble.
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    }
   }
 }

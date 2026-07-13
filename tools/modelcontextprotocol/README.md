@@ -23,12 +23,19 @@ A `shippo_test_` key runs in test mode and produces test labels. A `shippo_live_
 - `--api-key=<key>` or env `SHIPPO_API_KEY`: use a Shippo API key instead of OAuth.
 - `--url=<url>`: override the server (default `https://mcp.shippo.com`).
 - `--shippo-account=<id>`: act on a managed account (sends `SHIPPO-ACCOUNT-ID`).
+- `--callback-port=<n>`: pin the OAuth loopback callback port (integer 1024-65535). By default the port is derived deterministically per host, so re-authorization keeps matching the registered redirect.
+- `--help`: print usage and exit.
+- `--version`: print the version and exit.
 
 ## Client config
 
 ```json
 { "mcpServers": { "shippo": { "command": "npx", "args": ["-y", "@shippo/shippo-mcp"] } } }
 ```
+
+## Credential cache
+
+OAuth sign-in state (the registered client, tokens, and PKCE verifier) is cached under `~/.shippo-mcp`, in a per-host subdirectory. Delete that directory to fully reset sign-in state and start a fresh sign-in on the next run.
 
 ## Versioning
 

@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join as joinPath } from 'node:path';
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
+import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type {
   OAuthClientMetadata,
   OAuthClientInformation,
@@ -33,15 +34,58 @@ export function buildApiKeyHeaders(
   return headers;
 }
 
+// The message the key-door 401 surfaces to the user. Kept as an exported
+// constant so the wrap in index.ts and its test share one source of truth.
+export const KEY_DOOR_401_MESSAGE =
+  'The hosted key door rejected this API key. The key door may not be enabled on this host yet; OAuth (run without --api-key) is the working default until it opens. If the door is open, check that the key is a valid shippo_test_ or shippo_live_ key.';
+
+// True when the error is an HTTP 401 from the streamable-HTTP transport. The
+// SDK raises StreamableHTTPError with a numeric code; we also match a bare
+// " 401 " in any Error message so a differently-wrapped 401 still qualifies.
+export function isHttp401(err: unknown): boolean {
+  if (err instanceof StreamableHTTPError) return err.code === 401;
+  if (err instanceof Error) return /\b401\b/.test(err.message);
+  return false;
+}
+
+export interface BrowserSpawnPlan {
+  command: string;
+  args: string[];
+  options: { detached: boolean; stdio: 'ignore'; windowsVerbatimArguments?: boolean };
+}
+
+export function browserSpawnPlan(
+  url: string,
+  platform: NodeJS.Platform,
+  override?: string,
+): BrowserSpawnPlan {
+  if (override) {
+    return { command: override, args: [url], options: { detached: true, stdio: 'ignore' } };
+  }
+  if (platform === 'darwin') {
+    return { command: 'open', args: [url], options: { detached: true, stdio: 'ignore' } };
+  }
+  if (platform === 'win32') {
+    // cmd's start parses & as a command separator; the quoted form keeps the
+    // URL intact. The empty "" is start's window-title slot.
+    return {
+      command: 'cmd',
+      args: ['/d', '/s', '/c', `start "" "${url}"`],
+      options: { detached: true, stdio: 'ignore', windowsVerbatimArguments: true },
+    };
+  }
+  return { command: 'xdg-open', args: [url], options: { detached: true, stdio: 'ignore' } };
+}
+
 export function defaultOpenBrowser(url: string, command?: string): void {
-  const cmd =
-    command ??
-    (process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open');
-  const child = spawn(cmd, [url], {
-    stdio: 'ignore',
-    detached: true,
-    shell: process.platform === 'win32',
-  });
+  // Always print the manual fallback first: browser auto-open is best-effort, so
+  // the user can copy the URL even when nothing launches (headless SSH, missing
+  // opener, sandbox). stderr only; stdout is the MCP channel.
+  process.stderr.write(
+    `[shippo-mcp] opening your browser to sign in; if nothing opens, open this URL yourself: ${url}\n`,
+  );
+  const plan = browserSpawnPlan(url, process.platform, command);
+  const child = spawn(plan.command, plan.args, plan.options);
   child.on('error', (err) =>
     process.stderr.write(
       `[shippo-mcp] could not open a browser automatically (${err.message}). Open this URL manually: ${url}\n`,
@@ -51,10 +95,15 @@ export function defaultOpenBrowser(url: string, command?: string): void {
 }
 
 export class ShippoOAuthProvider implements OAuthClientProvider {
+  // The last state value handed to the authorization server, recorded so the
+  // loopback callback can reject requests that carry a mismatched state.
+  public lastState?: string;
+
   constructor(
     private store: FileStore,
     private port: number,
     private open: (url: string) => void,
+    private onState?: (s: string) => void,
   ) {}
 
   get redirectUrl(): string {
@@ -95,16 +144,37 @@ export class ShippoOAuthProvider implements OAuthClientProvider {
     return v;
   }
   state(): string {
-    return randomUUID();
+    this.lastState = randomUUID();
+    this.onState?.(this.lastState);
+    return this.lastState;
+  }
+  // Lets the SDK purge cached credentials the server has flagged invalid, so a
+  // stale DCR client or expired token does not wedge every future sign-in.
+  invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery'): void {
+    if (scope === 'all' || scope === 'tokens') this.store.delete('tokens');
+    if (scope === 'all' || scope === 'client') this.store.delete('client');
+    if (scope === 'all' || scope === 'verifier') this.store.delete('verifier');
+    // 'discovery' state is never persisted here, so there is nothing to delete.
   }
   redirectToAuthorization(authorizationUrl: URL): void {
     this.open(authorizationUrl.toString());
   }
 }
 
+// Derives ten deterministic candidate callback ports from the host. A fixed set
+// per host lets the persisted DCR redirect_uri keep matching across runs (strict
+// servers exact-match loopback redirects), while still leaving fallbacks if the
+// first is busy. Base lands in 43700-44499, so base+9 stays under 44509.
+export function defaultCallbackPorts(host: string): number[] {
+  const base = 43700 + (parseInt(createHash('sha256').update(host).digest('hex').slice(0, 4), 16) % 800);
+  return Array.from({ length: 10 }, (_, i) => base + i);
+}
+
 // Starts the loopback server, returns the chosen port plus a promise that
-// resolves with the authorization code when the callback is hit.
-export function startCallbackServer(): Promise<{ port: number; code: Promise<string> }> {
+// resolves with the authorization code when a state-valid callback is hit.
+export function startCallbackServer(
+  opts: { ports?: number[]; getState?: () => string | undefined } = {},
+): Promise<{ port: number; code: Promise<string> }> {
   return new Promise((resolve, reject) => {
     let resolveCode!: (code: string) => void;
     let rejectCode!: (err: Error) => void;
@@ -118,6 +188,17 @@ export function startCallbackServer(): Promise<{ port: number; code: Promise<str
         res.writeHead(404).end();
         return;
       }
+      // I5: when the caller supplies an expected state, only a callback whose
+      // state exactly matches may settle the flow. Everything else (wrong state,
+      // or a callback that arrives before the flow started) gets a 400 and the
+      // server keeps listening, so a stray request cannot resolve or close it.
+      if (opts.getState) {
+        const expected = opts.getState();
+        if (expected === undefined || u.searchParams.get('state') !== expected) {
+          res.writeHead(400, { 'content-type': 'text/plain' }).end('Invalid state');
+          return;
+        }
+      }
       const err = u.searchParams.get('error');
       const c = u.searchParams.get('code');
       res.writeHead(200, { 'content-type': 'text/html' });
@@ -127,17 +208,54 @@ export function startCallbackServer(): Promise<{ port: number; code: Promise<str
       else if (c) resolveCode(c);
       else rejectCode(new Error('Authorization callback missing the code.'));
     });
-    server.on('error', reject);
-    server.listen(0, 'localhost', () => {
+
+    const finish = (): void => {
+      // Do not let the idle callback listener hold the event loop: if the client
+      // closes stdin before sign-in starts, the bridge must drain and exit. While
+      // a real sign-in is in progress, open stdin keeps the process alive, so an
+      // unref'd server still serves the callback.
+      server.unref();
       const addr = server.address();
       const port = typeof addr === 'object' && addr ? addr.port : 0;
       resolve({ port, code });
-    });
-    // Do not let the idle callback listener hold the event loop: if the client
-    // closes stdin before sign-in starts, the bridge must drain and exit. While
-    // a real sign-in is in progress, open stdin keeps the process alive, so an
-    // unref'd server still serves the callback.
-    server.unref();
+    };
+
+    // One listen attempt on `port`; onFail runs (with the error) if it fails.
+    const listenOn = (port: number, onFail: (e: NodeJS.ErrnoException) => void): void => {
+      const onError = (e: NodeJS.ErrnoException): void => {
+        server.removeListener('listening', onListening);
+        onFail(e);
+      };
+      const onListening = (): void => {
+        server.removeListener('error', onError);
+        finish();
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(port, 'localhost');
+    };
+
+    const ports = opts.ports;
+    if (ports && ports.length > 0) {
+      const tryAt = (i: number): void => {
+        listenOn(ports[i], (e) => {
+          if (e.code === 'EADDRINUSE' && i + 1 < ports.length) {
+            tryAt(i + 1);
+          } else if (e.code === 'EADDRINUSE') {
+            process.stderr.write(
+              '[shippo-mcp] preferred callback ports busy; using an ephemeral port (you may need to re-approve the app)\n',
+            );
+            listenOn(0, reject);
+          } else {
+            reject(e);
+          }
+        });
+      };
+      tryAt(0);
+    } else {
+      // No candidates: ephemeral port, today's behavior.
+      listenOn(0, reject);
+    }
   });
 }
 
@@ -160,13 +278,25 @@ export interface OAuthSetup {
   authCode: Promise<string>;
 }
 
-// Starts the loopback server, then builds a provider bound to its port.
+// Starts the loopback server, then builds a provider bound to its port. The
+// state ref bridges the two: the server is created before the provider exists,
+// so it reads the expected state lazily through a mutable box the provider fills
+// via its onState hook.
 export async function setupOAuth(
   host: string,
-  deps: { store?: FileStore; openBrowser?: (url: string) => void } = {},
+  deps: { store?: FileStore; openBrowser?: (url: string) => void; callbackPort?: number } = {},
 ): Promise<OAuthSetup> {
-  const { port, code } = await startCallbackServer();
+  const stateRef: { current?: string } = {};
+  const ports = deps.callbackPort ? [deps.callbackPort] : defaultCallbackPorts(host);
+  const { port, code } = await startCallbackServer({ ports, getState: () => stateRef.current });
   const store = deps.store ?? new FileStore(defaultCacheDir(), host);
-  const provider = new ShippoOAuthProvider(store, port, deps.openBrowser ?? defaultOpenBrowser);
+  const provider = new ShippoOAuthProvider(
+    store,
+    port,
+    deps.openBrowser ?? defaultOpenBrowser,
+    (s) => {
+      stateRef.current = s;
+    },
+  );
   return { provider, authCode: code };
 }
