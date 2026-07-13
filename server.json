@@ -24,5 +24,13 @@
       "type": "streamable-http",
       "url": "https://mcp.shippo.com"
     }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@shippo/shippo-mcp",
+      "version": "3.0.0",
+      "transport": { "type": "stdio" }
+    }
   ]
 }

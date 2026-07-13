@@ -24,9 +24,10 @@ export function buildApiKeyHeaders(
   apiKey: string,
   shippoAccount?: string,
 ): Record<string, string> {
-  // NOTE (Task 9): pin "Bearer" vs "ShippoToken" against the #101 door's
-  // code/api_key_auth.py scheme_for() before release. The door classifies by
-  // the shippo_(live|test)_ prefix in the header value.
+  // Scheme pinned (AI-275/AI-264): the hosted door admits the raw key as the
+  // BEARER value of the inbound Authorization header (see the proxy handler's
+  // docstring in shippo-utilities); ShippoToken is only the proxy's outbound
+  // scheme to api.goshippo.com. Bearer here is correct.
   const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
   if (shippoAccount) headers['SHIPPO-ACCOUNT-ID'] = shippoAccount;
   return headers;
