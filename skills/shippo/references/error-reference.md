@@ -126,9 +126,19 @@ Common Shippo API errors, their causes, and recovery steps.
 - **Recovery:** Re-authorize the Shippo MCP OAuth session. In Claude Code, run `/mcp` and sign in. Confirm the authorized account has access to the resource.
 
 ### Object not found
-- **Pattern:** A valid-looking object ID returns a not-found error.
-- **Cause:** The object does not exist on the authorized account, or it belongs to a different account.
-- **Recovery:** Confirm you are signed in to the account that owns the object.
+- **Pattern:** A valid-looking object ID returns a not-found error, e.g. `API request failed with status: 404 - {"detail":"Not found."}`.
+- **Cause:** The object does not exist on the authorized account, or it belongs to a different account. IDs are type-specific: a rate `object_id` is not a transaction ID.
+- **Recovery:** **Permanent for these inputs; do not retry the identical call.** Verify the ID via the matching `List*` operation (e.g. `ListCarrierAccounts` before `GetCarrierAccount`), then confirm you are signed in to the account that owns the object.
+
+### Permission denied
+- **Pattern:** `API request failed with status: 403 - {"detail":"You do not have permission to perform this action."}`
+- **Cause:** The object exists but belongs to another account (or a platform sub-account) the authorized token cannot read. This is an ownership check, not a transient failure.
+- **Recovery:** **Permanent for these inputs; never retry the identical call.** Verify the ID came from a `List*` call on this account. If the user manages platform sub-accounts, the object may live on a sub-account the MCP session cannot see.
+
+### Generic gateway errors
+- **Pattern:** `An internal error occurred. Please retry later.` on a tool result.
+- **Cause:** This is the gateway's catch-all relay message, and it covers input-side conditions as well as transient ones. In practice the most common cause is an input issue: an object ID that is not visible to the authorized account or is the wrong ID type.
+- **Recovery:** Verify the inputs first: confirm the ID via the matching `List*` operation, or check the schema with `shippo_describe_tool`. If the inputs check out, retry once; a second identical failure means stop and report.
 
 ---
 
@@ -136,6 +146,8 @@ Common Shippo API errors, their causes, and recovery steps.
 
 - **Never guess** parcel dimensions, weight, customs values, HS codes, or signer names. Always ask the user.
 - **Do not auto-retry** transport, auth, or rate-limit errors. Report the error to the user and stop.
+- **Never retry 403/404 tool errors with the same arguments.** They are permanent for those inputs; fix the ID or account first.
+- The server may append a `[shippo-mcp] ...` guidance block to error results; follow it, it names the exact expected field or the recommended next call.
 
 ---
 
@@ -164,9 +176,9 @@ Status 404 Content-Type application/json Body: {"detail":"Not found."}
 
 These typically indicate the upstream Shippo API returned an unexpected shape (e.g. a 404 on a tracking lookup the SDK didn't anticipate). Report the plaintext body to the user verbatim, it carries the actual error detail.
 
-### Argument-validation errors (JSON-RPC `-32602`)
+### Argument-validation errors
 
-Pre-call validation failures (missing required field, type mismatch) return JSON-RPC error code `-32602` ("Invalid params") with a `message` field describing the failure. These are MCP-client-side; correct the arguments and retry.
+On the hosted server, pre-call validation failures (missing required field, type mismatch) surface as a tool result with `isError: true` whose text starts with `Parameter validation failed: Invalid request parameters: ...` and names the offending field, e.g. `Missing required field(s): 'ShipmentId'`. Parameter names are exact and **case-sensitive** (see the naming note in [tool-reference](tool-reference.md)); when a required field looks "missing" but you passed it, check the casing, then call `shippo_describe_tool` for the exact schema. The call never reached Shippo; correct the arguments and retry once. (Standalone/legacy servers may instead return JSON-RPC error code `-32602` with the same meaning.)
 
 ### Handling both paths
 

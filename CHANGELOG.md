@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## 1.5.2
+
+`package.json:version` 1.5.1 -> 1.5.2. Ships the parameter-casing and error-guidance corrections below to the Claude app-plugin release (`shippo-plugin.zip`).
+
+### Fixed
+- `shippo/references/tool-reference.md`: corrected every by-id operation's required parameter name to the exact case-sensitive spelling the hosted server validates (mostly PascalCase: `ShipmentId`, `OrderId`, `TransactionId`, `BatchId`, `CarrierAccountId`, `CarrierParcelTemplateToken`, `UserParcelTemplateObjectId`, `ServiceGroupId`, `ShippoAccountId`, `AddressId`, `Carrier`/`TrackingNumber` on `GetTrack`, `CurrencyCode`; exceptions `webhookId` and v2 `address_id`). The doc previously listed snake_case names that fail the server's case-sensitive validation ("Missing required field(s)"), one of the most common live error classes. Added a parameter-naming note; `UpdateServiceGroup` now correctly documents body `object_id` (no path parameter), and `InitiateOauth2Signin` documents `CarrierAccountObjectId`.
+- `shippo/references/error-reference.md`: argument-validation section now documents the hosted server's actual failure shape (`isError: true` with `Parameter validation failed: ...`) with casing guidance, instead of only the legacy JSON-RPC `-32602` path; added explicit entries for 403 permission-denied and generic gateway relay errors with do-not-retry-identical-inputs recovery steps.
+- `shippo-best-practices`: two new critical rules, exact case-sensitive by-id parameter names, and never retrying 403/404 tool errors with unchanged arguments.
+
+### Changed
+- ClawHub bundle 1.4.2 -> 1.4.3: republishes the digest with the corrections above.
+
 ### Added
 - Knowledge pack channel for assistants that do not load SKILL.md folders (ChatGPT, Gemini, and similar): `scripts/build-knowledge-pack.js` composes `providers/knowledge-pack/shippo-knowledge-pack.md` from the canonical skills and references, runs in `npm run sync`, and is guarded by `check-no-generated-edits` rule (g). `release.yml` now builds the banner-stripped pack, attests it, and attaches it to every version-bump release alongside `shippo-plugin.zip`.
 - `server.json` at the repo root: metadata for publishing the hosted Shippo MCP server (`mcp.shippo.com`) to the official MCP Registry as `com.shippo/shippo-mcp`. Remote streamable-http entry; source of truth for the registry listing. Publishing uses DNS auth on the shippo.com apex (verification TXT record live via shippo-tf-services #6996), so no repo-side credentials or auto-publish workflow are wired here.

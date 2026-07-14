@@ -1,7 +1,7 @@
 ---
 name: shippo
 description: "A shipping and logistics skill for Shippo. Get multi-carrier rates (USPS, UPS, FedEx, DHL, 30+), buy domestic and international labels with customs, validate addresses, track packages with webhooks, and run bulk CSV batches, plus cost analysis, integration routing, and SDK-upgrade help. Runs through Shippo's hosted MCP with per-user OAuth (sign in once, nothing to copy or store). Uses Shippo's discounted carrier rates."
-version: 1.4.2
+version: 1.4.3
 license: MIT
 metadata:
   openclaw:
@@ -77,6 +77,8 @@ Read the relevant skill or reference before answering integration questions or w
 - **Parcel dimensions and weight must be strings, not numbers.** Use `"10"`, never `10`.
 - **Label URLs are S3 signed URLs.** Always display the complete URL, truncating breaks the signature.
 - **Rates expire after 7 days.** Re-create the shipment for fresh rates.
+- **By-id parameter names are case-sensitive** (mostly PascalCase: `ShipmentId`, `TransactionId`, `OrderId`). Use the exact name from `shippo_describe_tool`; do not guess snake_case.
+- **Never retry a 403/404 tool error with the same arguments.** Ownership and not-found errors are permanent for those inputs; verify the ID via the matching `List*` operation first. The generic `An internal error occurred. Please retry later.` relay most often traces to an input issue too, so verify inputs before retrying, and retry the identical call at most once.
 
 ### Response handling
 

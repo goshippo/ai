@@ -6,6 +6,8 @@ Reference for the Shippo operations callable through the hosted MCP server, grou
 
 **Data type note:** Dimensions (length, width, height) and weight values must be passed as **strings**, not numbers (e.g., `"12"` not `12`). This applies to parcels, customs items, and all weight/dimension fields.
 
+**Parameter naming note:** Parameter names are **case-sensitive**, and the by-id operations use the exact spelling returned by `shippo_describe_tool` -- mostly PascalCase (`ShipmentId`, `OrderId`, `TransactionId`, `BatchId`, `CarrierAccountId`), with a few exceptions (`webhookId`, and v2 address operations use `address_id`). Body and query fields are snake_case. When unsure, call `shippo_describe_tool` first rather than guessing a casing.
+
 ---
 
 ## Addresses
@@ -28,7 +30,7 @@ Parse a freeform address string into structured components. Returns v2 field nam
 
 ### `ValidateAddressByID` (legacy)
 Validate an existing address by object ID using v1 field names.
-- **Required:** `address_id` (string)
+- **Required:** `AddressId` (string)
 
 ### `GetAddress`
 Retrieve a previously created address by ID.
@@ -50,7 +52,7 @@ Create a new shipment and retrieve available rates. **Async:** if `async` is tru
 
 ### `GetShipment`
 Retrieve a shipment by ID. Use to poll for rates after async creation.
-- **Required:** `shipment_id` (string)
+- **Required:** `ShipmentId` (string)
 
 ### `ListShipments`
 List all shipments. Supports pagination.
@@ -58,7 +60,7 @@ List all shipments. Supports pagination.
 
 ### `ListShipmentRates`
 Retrieve rates for an existing shipment by ID.
-- **Required:** `shipment_id` (string)
+- **Required:** `ShipmentId` (string)
 
 ---
 
@@ -66,11 +68,11 @@ Retrieve rates for an existing shipment by ID.
 
 ### `GetRate`
 Retrieve a specific rate by ID.
-- **Required:** `rate_id` (string)
+- **Required:** `RateId` (string)
 
 ### `ListShipmentRatesByCurrencyCode`
 Retrieve shipment rates filtered to a specific currency.
-- **Required:** `shipment_id` (string), `currency_code` (string, ISO 4217 e.g., `USD`)
+- **Required:** `ShipmentId` (string), `CurrencyCode` (string, ISO 4217 e.g., `USD`)
 - **Optional:** `page` (integer), `results` (integer)
 
 ### `CreateLiveRate`
@@ -100,7 +102,7 @@ Purchase a shipping label from an existing rate. **Async:** returns immediately 
 
 ### `GetTransaction`
 Retrieve a transaction (label) by ID. Use to poll async label purchases.
-- **Required:** `transaction_id` (string)
+- **Required:** `TransactionId` (string)
 
 ### `ListTransactions`
 List all transactions. Supports filtering and pagination.
@@ -112,7 +114,7 @@ List all transactions. Supports filtering and pagination.
 
 ### `GetTrack`
 Get current tracking status for a carrier + tracking number.
-- **Required:** `carrier` (string, carrier token e.g., `usps`, `ups`, `fedex`, `dhl_express`), `tracking_number` (string)
+- **Required:** `Carrier` (string, carrier token e.g., `usps`, `ups`, `fedex`, `dhl_express`), `TrackingNumber` (string)
 
 ### `CreateTrack`
 Register a shipment for tracking webhook notifications.
@@ -131,19 +133,19 @@ Create a new batch of shipments. **Async:** returns immediately with status `VAL
 
 ### `GetBatch`
 Retrieve a batch by ID. Includes status and per-shipment results.
-- **Required:** `batch_id` (string)
+- **Required:** `BatchId` (string)
 
 ### `PurchaseBatch`
 Purchase labels for all valid shipments in a batch. **Async:** triggers purchase; poll `GetBatch` until status is `PURCHASED`.
-- **Required:** `batch_id` (string)
+- **Required:** `BatchId` (string)
 
 ### `AddShipmentsToBatch`
 Add shipments to an existing batch (before purchase only).
-- **Required:** `batch_id` (string), `body` (array of batch shipment objects)
+- **Required:** `BatchId` (string), `body` (array of batch shipment objects)
 
 ### `RemoveShipmentsFromBatch`
 Remove shipments from an existing batch (before purchase only).
-- **Required:** `batch_id` (string), `shipment_ids` (array of string IDs)
+- **Required:** `BatchId` (string), `shipment_ids` (array of string IDs, in the request body)
 
 ---
 
@@ -156,7 +158,7 @@ Create a customs declaration for international shipments.
 
 ### `GetCustomsDeclaration`
 Retrieve a customs declaration by ID.
-- **Required:** `customs_declaration_id` (string)
+- **Required:** `CustomsDeclarationId` (string)
 
 ### `ListCustomsDeclarations`
 List all customs declarations. Supports pagination.
@@ -169,7 +171,7 @@ Create a customs item (individual line item within a declaration).
 
 ### `GetCustomsItem`
 Retrieve a customs item by ID.
-- **Required:** `customs_item_id` (string)
+- **Required:** `CustomsItemId` (string)
 
 ### `ListCustomsItems`
 List all customs items. Supports pagination.
@@ -186,7 +188,7 @@ Create an end-of-day manifest (SCAN form) for carrier pickup. **Async:** returns
 
 ### `GetManifest`
 Retrieve a manifest by ID.
-- **Required:** `manifest_id` (string)
+- **Required:** `ManifestId` (string)
 
 ### `ListManifests`
 List all manifests. Supports pagination.
@@ -203,7 +205,7 @@ Create a new parcel object.
 
 ### `GetParcel`
 Retrieve an existing parcel by ID.
-- **Required:** `parcel_id` (string)
+- **Required:** `ParcelId` (string)
 
 ### `ListParcels`
 List all parcels. Supports pagination.
@@ -219,7 +221,7 @@ List all carrier-provided parcel templates (e.g., USPS Flat Rate). Filterable by
 
 ### `GetCarrierParcelTemplate`
 Retrieve a specific carrier parcel template.
-- **Required:** `carrier_parcel_template_id` (string)
+- **Required:** `CarrierParcelTemplateToken` (string)
 
 ### `ListUserParcelTemplates`
 List all user-created parcel templates. No required parameters.
@@ -231,16 +233,16 @@ Create a new user parcel template.
 
 ### `GetUserParcelTemplate`
 Retrieve a user parcel template by ID.
-- **Required:** `user_parcel_template_id` (string)
+- **Required:** `UserParcelTemplateObjectId` (string)
 
 ### `UpdateUserParcelTemplate`
 Update an existing user parcel template.
-- **Required:** `user_parcel_template_id` (string)
+- **Required:** `UserParcelTemplateObjectId` (string)
 - **Optional:** Same fields as create
 
 ### `DeleteUserParcelTemplate`
 Delete a user parcel template.
-- **Required:** `user_parcel_template_id` (string)
+- **Required:** `UserParcelTemplateObjectId` (string)
 
 ---
 
@@ -256,11 +258,11 @@ Create a new carrier account.
 
 ### `GetCarrierAccount`
 Retrieve a carrier account by ID.
-- **Required:** `carrier_account_id` (string)
+- **Required:** `CarrierAccountId` (string)
 
 ### `UpdateCarrierAccount`
 Update a carrier account.
-- **Required:** `carrier_account_id` (string)
+- **Required:** `CarrierAccountId` (string)
 - **Optional:** `account_id` (string), `parameters` (object)
 
 ### `GetCarrierRegistrationStatus`
@@ -269,7 +271,7 @@ Get carrier registration status.
 
 ### `InitiateOauth2Signin`
 Connect a carrier account using OAuth 2.0.
-- **Required:** `carrier_account_id` (string), `redirect_url` (string)
+- **Required:** `CarrierAccountObjectId` (string), `redirect_url` (string)
 
 ---
 
@@ -282,7 +284,7 @@ Create a new order.
 
 ### `GetOrder`
 Retrieve an order by ID.
-- **Required:** `order_id` (string)
+- **Required:** `OrderId` (string)
 
 ### `ListOrders`
 List all orders. Supports pagination.
@@ -302,7 +304,7 @@ Create a refund (void a label). Must be requested within 30 days of purchase for
 
 ### `GetRefund`
 Retrieve a refund by ID.
-- **Required:** `refund_id` (string)
+- **Required:** `RefundId` (string)
 
 ### `ListRefunds`
 List all refunds. Supports pagination.
@@ -330,12 +332,12 @@ Create a new service group.
 
 ### `UpdateServiceGroup`
 Update an existing service group.
-- **Required:** `service_group_id` (string)
+- **Required:** `object_id` (string, service group ID, in the request body)
 - **Optional:** Same fields as create
 
 ### `DeleteServiceGroup`
 Delete a service group.
-- **Required:** `service_group_id` (string)
+- **Required:** `ServiceGroupId` (string)
 
 ---
 
@@ -348,19 +350,19 @@ Create a new webhook subscription.
 
 ### `getWebhook`
 Retrieve a specific webhook.
-- **Required:** `webhook_id` (string)
+- **Required:** `webhookId` (string)
 
 ### `listWebhooks`
 List all webhooks. No required parameters.
 
 ### `updateWebhook`
 Update an existing webhook.
-- **Required:** `webhook_id` (string)
+- **Required:** `webhookId` (string)
 - **Optional:** `url` (string), `event` (string), `is_test` (boolean), `active` (boolean)
 
 ### `deleteWebhook`
 Delete a webhook.
-- **Required:** `webhook_id` (string)
+- **Required:** `webhookId` (string)
 
 ---
 
@@ -376,11 +378,11 @@ Create a Shippo account.
 
 ### `GetShippoAccount`
 Retrieve a Shippo account.
-- **Required:** `shippo_account_id` (string)
+- **Required:** `ShippoAccountId` (string)
 
 ### `UpdateShippoAccount`
 Update a Shippo account.
-- **Required:** `shippo_account_id` (string)
+- **Required:** `ShippoAccountId` (string)
 - **Optional:** `email` (string), `first_name` (string), `last_name` (string), `company_name` (string)
 
 ---
