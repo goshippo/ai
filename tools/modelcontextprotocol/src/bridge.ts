@@ -21,6 +21,13 @@ export function extractClientInfo(message: unknown): ClientInfo | undefined {
   return m.params?.clientInfo;
 }
 
+// Best-effort HTTP status from an SDK StreamableHTTPError (whose `code` is the HTTP
+// status), surfaced in the JSON-RPC error `data` so the model can tell a 429 from a 503.
+function httpStatusOf(e: unknown): number | undefined {
+  const c = (e as { code?: unknown } | null)?.code;
+  return typeof c === 'number' ? c : undefined;
+}
+
 export async function runBridge(opts: BridgeOptions): Promise<void> {
   const { downstream, makeUpstream } = opts;
   let upstreamPromise: Promise<Transportish> | undefined;
@@ -61,7 +68,28 @@ export async function runBridge(opts: BridgeOptions): Promise<void> {
       const upstream = await upstreamPromise;
       await upstream.send(message);
     } catch (e) {
-      process.stderr.write(`[shippo-mcp] failed to forward message: ${(e as Error).message}\n`);
+      const err = e as Error;
+      // If the client is awaiting a response for this id, surface the failure as a
+      // JSON-RPC error rather than dropping it to stderr; otherwise the client hangs
+      // until its own request timeout (60s) with no signal. This is the path that
+      // carries a 429, a 5xx, or the api-key key-door 401 (and its guidance message)
+      // back to the model. Notifications have no id and stay stderr-only.
+      const id = (message as { id?: string | number | null })?.id;
+      if (id !== undefined && id !== null) {
+        const httpStatus = httpStatusOf(e);
+        void Promise.resolve(
+          downstream.send({
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: -32603,
+              message: `[shippo-mcp] upstream request failed: ${err.message}`,
+              ...(httpStatus !== undefined ? { data: { httpStatus } } : {}),
+            },
+          }),
+        ).catch(() => {});
+      }
+      process.stderr.write(`[shippo-mcp] failed to forward message: ${err.message}\n`);
     }
   };
 

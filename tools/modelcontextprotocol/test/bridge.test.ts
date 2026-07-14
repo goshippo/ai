@@ -50,6 +50,48 @@ test('forwards upstream messages back to downstream', async () => {
   assert.deepEqual(downstream.sent[0], reply);
 });
 
+// An upstream whose send() always rejects, mirroring the SDK's StreamableHTTPError
+// (its `code` is the HTTP status) on any non-2xx.
+function throwingUpstream(err: Error) {
+  const t: any = {
+    async start() {},
+    async send(_m: unknown) { throw err; },
+    async close() { this.onclose?.(); },
+  };
+  return t;
+}
+
+test('a failed upstream request surfaces a JSON-RPC error downstream (no silent 60s hang)', async () => {
+  const downstream = fakeTransport();
+  const e429: any = new Error('HTTP 429 rate limited'); e429.code = 429;
+  await runBridge({ downstream, makeUpstream: () => throwingUpstream(e429) });
+  await downstream.onmessage({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: {} });
+  assert.equal(downstream.sent.length, 1);
+  const resp: any = downstream.sent[0];
+  assert.equal(resp.jsonrpc, '2.0');
+  assert.equal(resp.id, 7);
+  assert.equal(resp.error.code, -32603);
+  assert.match(resp.error.message, /429/);
+  assert.deepEqual(resp.error.data, { httpStatus: 429 });
+});
+
+test('the api-key key-door 401 message reaches the model instead of stderr-only', async () => {
+  const downstream = fakeTransport();
+  const doorErr = new Error('Shippo key door rejected this key; it may not be enabled on this host yet');
+  await runBridge({ downstream, makeUpstream: () => throwingUpstream(doorErr) });
+  await downstream.onmessage({ jsonrpc: '2.0', id: 'abc', method: 'tools/call', params: {} });
+  const resp: any = downstream.sent[0];
+  assert.equal(resp.id, 'abc');
+  assert.match(resp.error.message, /key door rejected this key/);
+});
+
+test('a failed upstream notification is not answered (no id, stderr only)', async () => {
+  const downstream = fakeTransport();
+  await runBridge({ downstream, makeUpstream: () => throwingUpstream(new Error('boom')) });
+  await downstream.onmessage({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  assert.equal(downstream.sent.length, 0);
+});
+
 // A fake whose close() fires onclose, mirroring the real SDK transports. Used
 // to prove the bridge does not recurse between the two sides on shutdown.
 function selfClosingFake() {

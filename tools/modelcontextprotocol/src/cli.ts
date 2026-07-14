@@ -84,6 +84,21 @@ export function parseConfig(argv: string[], env: NodeJS.ProcessEnv): Config {
   }
 
   const url = flags['url'] || DEFAULT_URL;
+  // Guard the secret-exfil path: the api key or OAuth token is sent to this URL, so
+  // refuse a non-https target unless it is loopback (dev-qa is https; only local
+  // testing uses http, and only against localhost).
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error(`Invalid --url: ${url}. ${HELP_SUFFIX}`);
+  }
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+  if (parsedUrl.protocol !== 'https:' && !loopbackHosts.has(parsedUrl.hostname)) {
+    throw new Error(
+      `Refusing to send credentials over ${parsedUrl.protocol} to a non-local host (${parsedUrl.hostname}). Use https, or localhost for local testing.`,
+    );
+  }
   const apiKey = flags['api-key'] || env.SHIPPO_API_KEY || undefined;
   const shippoAccount = flags['shippo-account'] || undefined;
 

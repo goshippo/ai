@@ -15,12 +15,6 @@ import { FileStore } from './store.ts';
 import { PKG_NAME, PKG_VERSION } from './version.ts';
 import type { Config } from './cli.ts';
 
-export interface AuthContext {
-  headers: Record<string, string>;
-  authProvider?: unknown;
-  completeAuthorization?: (transport: { finishAuth(code: string): Promise<void> }) => Promise<void>;
-}
-
 export function buildApiKeyHeaders(
   apiKey: string,
   shippoAccount?: string,

@@ -71,3 +71,13 @@ test('--help and --version set discriminants and short-circuit validation', () =
   // help wins even alongside an otherwise-invalid flag
   assert.equal(parseConfig(['--help', '--nonsense'], {}).help, true);
 });
+
+test('refuses a non-https --url to a non-local host (credential-exfil guard)', () => {
+  assert.throws(() => parseConfig(['--url=http://evil.example.com'], {}), /Refusing to send credentials/);
+  assert.throws(() => parseConfig(['--url=not a url'], {}), /Invalid --url/);
+});
+
+test('allows https and localhost http --url overrides', () => {
+  assert.equal(parseConfig(['--url=https://mcp.shippodev.com'], {}).url, 'https://mcp.shippodev.com');
+  assert.equal(parseConfig(['--url=http://localhost:3000'], {}).url, 'http://localhost:3000');
+});
