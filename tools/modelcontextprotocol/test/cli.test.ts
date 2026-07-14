@@ -15,16 +15,16 @@ test('--url overrides the host', () => {
 });
 
 test('--api-key selects apiKey mode', () => {
-  const c = parseConfig(['--api-key=shippo_test_abc'], {});
+  const c = parseConfig(['--api-key=shippo_test_xxxxx'], {});
   assert.equal(c.authMode, 'apiKey');
-  assert.equal(c.apiKey, 'shippo_test_abc');
+  assert.equal(c.apiKey, 'shippo_test_xxxxx');
 });
 
 test('SHIPPO_API_KEY env is honored, flag wins over env', () => {
-  assert.equal(parseConfig([], { SHIPPO_API_KEY: 'shippo_live_xyz' }).apiKey, 'shippo_live_xyz');
+  assert.equal(parseConfig([], { SHIPPO_API_KEY: 'shippo_live_xxxxx' }).apiKey, 'shippo_live_xxxxx');
   assert.equal(
-    parseConfig(['--api-key=shippo_test_flag'], { SHIPPO_API_KEY: 'shippo_live_env' }).apiKey,
-    'shippo_test_flag',
+    parseConfig(['--api-key=shippo_test_xxxxx'], { SHIPPO_API_KEY: 'shippo_live_xxxxx' }).apiKey,
+    'shippo_test_xxxxx',
   );
 });
 

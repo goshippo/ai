@@ -31,7 +31,7 @@ Flags:
 
 Quickstart:
   npx -y @shippo/shippo-mcp
-  npx -y @shippo/shippo-mcp --api-key=shippo_test_XXXX
+  npx -y @shippo/shippo-mcp --api-key=shippo_test_xxxxx
 `;
 
 interface ParsedArgs {

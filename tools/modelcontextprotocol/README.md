@@ -13,10 +13,10 @@ npx -y @shippo/shippo-mcp
 API key (headless, CI, or test mode). Prefer the environment variable so the key is not visible in the process list (`ps`) or persisted into client config:
 
 ```sh
-SHIPPO_API_KEY=shippo_test_XXXX npx -y @shippo/shippo-mcp
+SHIPPO_API_KEY=shippo_test_xxxxx npx -y @shippo/shippo-mcp
 ```
 
-The `--api-key=shippo_test_XXXX` flag also works, but the key is then visible to other local users in the process list, so reserve it for throwaway test keys.
+The `--api-key=shippo_test_xxxxx` flag also works, but the key is then visible to other local users in the process list, so reserve it for throwaway test keys.
 
 A `shippo_test_` key runs in test mode and produces test labels. A `shippo_live_` key runs on your live account, where buying a label is billable.
 

@@ -33,13 +33,13 @@ function httpGet(url: string): Promise<{ status: number; body: string }> {
 }
 
 test('api key becomes a Bearer header', () => {
-  const h = buildApiKeyHeaders('shippo_test_abc');
-  assert.equal(h.Authorization, 'Bearer shippo_test_abc');
+  const h = buildApiKeyHeaders('shippo_test_xxxxx');
+  assert.equal(h.Authorization, 'Bearer shippo_test_xxxxx');
   assert.equal('SHIPPO-ACCOUNT-ID' in h, false);
 });
 
 test('shippo account is forwarded as a header', () => {
-  const h = buildApiKeyHeaders('shippo_live_xyz', 'acct_9');
+  const h = buildApiKeyHeaders('shippo_live_xxxxx', 'acct_9');
   assert.equal(h['SHIPPO-ACCOUNT-ID'], 'acct_9');
 });
 
