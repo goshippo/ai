@@ -2455,7 +2455,7 @@ Get carrier registration status.
 
 #### `InitiateOauth2Signin`
 Connect a carrier account using OAuth 2.0.
-- **Required:** `CarrierAccountObjectId` (string), `redirect_url` (string)
+- **Required:** `CarrierAccountObjectId` (string), `redirect_uri` (string)
 
 ---
 
