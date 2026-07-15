@@ -15,13 +15,16 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
+    "build-dxt": "node build-dxt.js",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0"
   },
   "devDependencies": {
+    "@anthropic-ai/dxt": "^0.1.0",
     "@types/node": "^20.0.0",
+    "esbuild": "^0.25.0",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0"

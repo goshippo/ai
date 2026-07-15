@@ -35,6 +35,10 @@ A `shippo_test_` key runs in test mode and produces test labels. A `shippo_live_
 { "mcpServers": { "shippo": { "command": "npx", "args": ["-y", "@shippo/shippo-mcp"] } } }
 ```
 
+## Claude Desktop one-click install (.dxt)
+
+For Claude Desktop, a Desktop Extension is the no-config path: it signs in with OAuth in your browser on first use, so no API key is required. Build the bundle with `npm run build-dxt` (produces `shippo.dxt`), then open it in Claude Desktop to install. The optional API-key field in the extension settings is for headless / API-key use once the hosted key door is enabled; leave it blank to use OAuth.
+
 ## Credential cache
 
 OAuth sign-in state (the registered client, tokens, and PKCE verifier) is cached under `~/.shippo-mcp`, in a per-host subdirectory. Delete that directory to fully reset sign-in state and start a fresh sign-in on the next run.

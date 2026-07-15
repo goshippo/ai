@@ -22,3 +22,29 @@ test('client name without version', () => {
     '@shippo/shippo-mcp/3.0.0 (goose)',
   );
 });
+
+test('strips control characters from a hostile client name so the UA stays a valid header', () => {
+  const ua = buildUserAgent(
+    { name: 'Evil\r\nInjected-Header: x', version: '1.0' },
+    '@shippo/shippo-mcp',
+    '3.0.0',
+  );
+  assert.equal(ua, '@shippo/shippo-mcp/3.0.0 (EvilInjected-Header: x/1.0)');
+  // The result must be usable as a header value: undici rejects CR/LF/NUL, so a
+  // sanitized UA is what keeps such a client connected instead of erroring.
+  assert.doesNotThrow(() => new Headers({ 'User-Agent': ua }));
+});
+
+test('a name that is only control characters falls back to the base UA', () => {
+  assert.equal(
+    buildUserAgent({ name: '\r\n\t' }, '@shippo/shippo-mcp', '3.0.0'),
+    '@shippo/shippo-mcp/3.0.0',
+  );
+});
+
+test('non-ASCII client names pass through unchanged', () => {
+  assert.equal(
+    buildUserAgent({ name: 'クライアント' }, '@shippo/shippo-mcp', '3.0.0'),
+    '@shippo/shippo-mcp/3.0.0 (クライアント)',
+  );
+});

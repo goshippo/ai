@@ -87,7 +87,7 @@ test('defaultOpenBrowser does not crash the process when the opener binary is mi
   assert.ok(true);
 });
 
-import { assertBrowserCapable } from '../src/auth.ts';
+import { assertBrowserCapable, isHeadless } from '../src/auth.ts';
 
 test('headless with no key throws a clear, actionable error', () => {
   assert.throws(
@@ -98,6 +98,38 @@ test('headless with no key throws a clear, actionable error', () => {
 
 test('api-key mode never requires a browser', () => {
   assert.doesNotThrow(() => assertBrowserCapable({ authMode: 'apiKey' } as any, { CI: 'true' }));
+});
+
+test('isHeadless: a macOS desktop is interactive, SSH into macOS is headless', () => {
+  // stdout is a pipe under a desktop MCP client, so a TTY check would wrongly
+  // flag it; the GUI is present, so it must stay interactive.
+  assert.equal(isHeadless({}, 'darwin'), false);
+  assert.equal(isHeadless({ SSH_CONNECTION: '1.2.3.4 5 5.6.7.8 22' }, 'darwin'), true);
+});
+
+test('isHeadless: linux needs a display server', () => {
+  assert.equal(isHeadless({}, 'linux'), true);
+  assert.equal(isHeadless({ DISPLAY: ':0' }, 'linux'), false);
+  assert.equal(isHeadless({ WAYLAND_DISPLAY: 'wayland-0' }, 'linux'), false);
+});
+
+test('isHeadless: linux SSH with X11 forwarding (DISPLAY set) stays interactive', () => {
+  assert.equal(
+    isHeadless({ DISPLAY: 'localhost:10.0', SSH_CONNECTION: '1.2.3.4 5 5.6.7.8 22' }, 'linux'),
+    false,
+  );
+});
+
+test('isHeadless: CI is always headless regardless of platform', () => {
+  assert.equal(isHeadless({ CI: 'true' }, 'darwin'), true);
+  assert.equal(isHeadless({ CI: 'true', DISPLAY: ':0' }, 'linux'), true);
+});
+
+test('assertBrowserCapable applies the SSH rule for the given platform', () => {
+  assert.throws(
+    () => assertBrowserCapable({ authMode: 'oauth' } as any, { SSH_CONNECTION: 'x' }, 'darwin'),
+    /--api-key/,
+  );
 });
 
 test('an idle oauth callback server does not keep the process alive', () => {
@@ -190,9 +222,18 @@ test('startCallbackServer skips a busy preferred port and lands on the next', as
 
 // --- I2: the spec-promised 401 key-door message ---
 
-test('isHttp401 recognizes a transport 401 and a 401 in a message', () => {
+test('isHttp401 recognizes a transport 401 and the key-door signature', () => {
   assert.equal(isHttp401(new StreamableHTTPError(401, 'Unauthorized')), true);
-  assert.equal(isHttp401(new Error('HTTP 401 while connecting')), true);
+  assert.equal(
+    isHttp401(new Error('Shippo API keys are not accepted by this MCP')),
+    true,
+  );
+});
+
+test('isHttp401 ignores an incidental 401 in an unrelated message', () => {
+  // The old loose /\b401\b/ match would mislabel this as a key-door 401; the
+  // signature match must not.
+  assert.equal(isHttp401(new Error('read 401 bytes from the socket')), false);
 });
 
 test('isHttp401 is false for a 500 and unrelated errors', () => {

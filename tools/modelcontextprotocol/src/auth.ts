@@ -33,12 +33,16 @@ export function buildApiKeyHeaders(
 export const KEY_DOOR_401_MESSAGE =
   'The hosted key door rejected this API key. The key door may not be enabled on this host yet; OAuth (run without --api-key) is the working default until it opens. If the door is open, check that the key is a valid shippo_test_ or shippo_live_ key.';
 
-// True when the error is an HTTP 401 from the streamable-HTTP transport. The
-// SDK raises StreamableHTTPError with a numeric code; we also match a bare
-// " 401 " in any Error message so a differently-wrapped 401 still qualifies.
+// The hosted key door returns HTTP 401 for a rejected or not-yet-enabled API
+// key, which the streamable-HTTP transport surfaces as StreamableHTTPError with
+// code 401. As a fallback for a differently-wrapped error, match the stable
+// key-door text rather than a bare "401", which could appear incidentally in an
+// unrelated error message and mislabel it as a key-door rejection.
+const KEY_DOOR_SIGNATURE = /not accepted by this MCP|Complete the OAuth flow/i;
+
 export function isHttp401(err: unknown): boolean {
   if (err instanceof StreamableHTTPError) return err.code === 401;
-  if (err instanceof Error) return /\b401\b/.test(err.message);
+  if (err instanceof Error) return KEY_DOOR_SIGNATURE.test(err.message);
   return false;
 }
 
@@ -257,12 +261,31 @@ export function defaultCacheDir(): string {
   return joinPath(homedir(), '.shippo-mcp');
 }
 
-export function assertBrowserCapable(config: Config, env: NodeJS.ProcessEnv): void {
+// True when we are confident no local browser can complete the OAuth loopback:
+// CI, a Linux/BSD host with no display server, or a remote SSH session with no
+// forwarded display (the browser would open on the wrong machine, so the
+// loopback callback never arrives). A desktop MCP client spawns the bridge with
+// piped stdio but a working GUI and sets none of these, so it stays interactive.
+export function isHeadless(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (env.CI) return true;
+  const noDisplay = !env.DISPLAY && !env.WAYLAND_DISPLAY;
+  if (noDisplay && platform !== 'darwin' && platform !== 'win32') return true;
+  if (noDisplay && (env.SSH_CONNECTION || env.SSH_TTY)) return true;
+  return false;
+}
+
+export function assertBrowserCapable(
+  config: Config,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): void {
   if (config.authMode === 'apiKey') return;
-  const headless = !!env.CI || (!process.stdout.isTTY && !env.DISPLAY && process.platform === 'linux');
-  if (headless) {
+  if (isHeadless(env, platform)) {
     throw new Error(
-      'OAuth needs a browser and none is available. Pass --api-key (or set SHIPPO_API_KEY) for headless or CI use.',
+      'OAuth needs a browser and none is available. Pass --api-key (or set SHIPPO_API_KEY) for headless, SSH, or CI use.',
     );
   }
 }
