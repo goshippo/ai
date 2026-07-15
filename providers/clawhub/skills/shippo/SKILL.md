@@ -483,6 +483,10 @@ See `shippo/references/csv-format.md` for the column specification.
 10. Poll `GetBatch` until status changes from `PURCHASING` to `PURCHASED`. See Polling Intervals below.
 11. Report: total attempted, succeeded, failed. For successes: tracking_number and label_url (complete URL). For failures: error messages.
 
+#### Retrieving batch labels
+
+A purchased batch does not put each label URL inline on the batch object. Each entry in `batch_shipments[]` carries a `transaction` field, which is a Transaction object_id. Call `GetTransaction` on it to get that shipment's `label_url` and `tracking_number`. The batch-level `label_url` is a merged multi-label PDF (up to 100 labels per file) and cannot be split per order.
+
 #### Batch Size Guidance
 
 For batches over 500 shipments, consider splitting into multiple batches. Large batches take longer to validate and purchase, and a single failure can be harder to diagnose.

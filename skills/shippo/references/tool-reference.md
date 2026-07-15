@@ -134,10 +134,13 @@ Create a new batch of shipments. **Async:** returns immediately with status `VAL
 ### `GetBatch`
 Retrieve a batch by ID. Includes status and per-shipment results.
 - **Required:** `BatchId` (string)
+- **Optional:** `object_results` (string) filters `batch_shipments` by per-shipment result -- e.g. `creation_failed`, `creation_succeeded`, `purchase_failed`, `purchase_succeeded` -- to pull just the failed shipments out of a large batch.
+- On `INVALID`, the actionable validation errors are the per-shipment `batch_shipments[].messages`, not a batch-level message.
 
 ### `PurchaseBatch`
 Purchase labels for all valid shipments in a batch. **Async:** triggers purchase; poll `GetBatch` until status is `PURCHASED`.
 - **Required:** `BatchId` (string)
+- **Retrieving labels:** a purchased batch does not put each label URL inline on the batch. Each `batch_shipments[].transaction` is a Transaction object_id; call `GetTransaction` on it for that shipment's `label_url` and `tracking_number`. The batch-level `label_url` is a merged multi-label PDF (up to 100 labels per file) that cannot be split per order.
 
 ### `AddShipmentsToBatch`
 Add shipments to an existing batch (before purchase only).
