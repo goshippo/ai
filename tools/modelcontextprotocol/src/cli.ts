@@ -18,11 +18,15 @@ const KNOWN_FLAGS = new Set(['url', 'api-key', 'shippo-account', 'callback-port'
 const VALUE_FLAGS = ['url', 'api-key', 'shippo-account', 'callback-port'] as const;
 const HELP_SUFFIX = 'Run npx @shippo/shippo-mcp --help for usage.';
 
+// API-key auth is fully implemented (parseConfig below + buildApiKeyHeaders in
+// auth.ts) but intentionally NOT advertised until the hosted key door ships.
+// When it does, restore these lines to USAGE:
+//   Flags:      --api-key=<key>   Use a Shippo API key instead of OAuth (or set SHIPPO_API_KEY).
+//   Quickstart: npx -y @shippo/shippo-mcp --api-key=shippo_test_xxxxx
 export const USAGE = `@shippo/shippo-mcp v${PKG_VERSION}
 Local bridge to the hosted Shippo MCP server: multi-carrier shipping for AI agents.
 
 Flags:
-  --api-key=<key>         Use a Shippo API key instead of OAuth (or set SHIPPO_API_KEY).
   --url=<url>             Override the server URL (default https://mcp.shippo.com).
   --shippo-account=<id>   Act on a managed account (sends SHIPPO-ACCOUNT-ID).
   --callback-port=<n>     Pin the OAuth loopback callback port (integer 1024-65535).
@@ -31,7 +35,6 @@ Flags:
 
 Quickstart:
   npx -y @shippo/shippo-mcp
-  npx -y @shippo/shippo-mcp --api-key=shippo_test_xxxxx
 `;
 
 interface ParsedArgs {

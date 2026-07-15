@@ -1,13 +1,17 @@
 # <img src="https://raw.githubusercontent.com/goshippo/ai/main/tools/modelcontextprotocol/assets/shippo-logo.png" width="30" alt="Shippo logo"> Shippo MCP Server
 
 > [!NOTE]
-> This package is a thin **local bridge** to the hosted Shippo MCP server at `https://mcp.shippo.com`. It runs over stdio for MCP clients that connect to a local command, and signs you in with **OAuth** in your browser by default (no API key required). Tool discovery and execution happen on the hosted server, so the local tool surface always matches hosted. If your client speaks remote MCP with OAuth, you can connect to `https://mcp.shippo.com` directly instead of using this package.
+> This package is a thin **local bridge** to the hosted Shippo MCP server at `https://mcp.shippo.com`. It runs over stdio for MCP clients that connect to a local command, and signs you in with **OAuth** in your browser (no API key required). Tool discovery and execution happen on the hosted server, so the local tool surface always matches hosted. If your client speaks remote MCP with OAuth, you can connect to `https://mcp.shippo.com` directly instead of using this package.
 
 Model Context Protocol (MCP) Server for the Shippo API.
 
 You must register for a [Shippo account](https://apps.goshippo.com/join) to use our API. It's free to sign up. Only pay to print a live label. Test labels are free.
 
-By default you sign in through your browser (OAuth), so no API key is needed. For headless or automation use (CI, cron, service accounts) you can supply a Shippo [API token](https://docs.goshippo.com/docs/guides_general/authentication/) instead. A `shippo_test_` key runs in test mode and produces test labels; a `shippo_live_` key runs on your live account, where buying a label is billable.
+You sign in through your browser (OAuth), so there is no API key to manage.
+
+<!-- API-KEY-AUTH (hidden until the hosted key door ships; the code path stays live, this is docs-only):
+For headless or automation use (CI, cron, service accounts) you can supply a Shippo [API token](https://docs.goshippo.com/docs/guides_general/authentication/) instead. A `shippo_test_` key runs in test mode and produces test labels; a `shippo_live_` key runs on your live account, where buying a label is billable.
+-->
 
 ## Summary
 
@@ -122,7 +126,7 @@ npx @shippo/shippo-mcp --help
 
 ## Configuration
 
-### OAuth (default)
+### Authentication
 
 No configuration needed. On the first request the bridge opens your browser to sign in to Shippo, then caches the session locally (see [Security](#security)).
 
@@ -137,6 +141,8 @@ No configuration needed. On the first request the bridge opens your browser to s
 }
 ```
 
+<!-- API-KEY-AUTH (hidden until the hosted key door ships; the code path stays live, this is docs-only):
+
 ### API key (headless / CI / automation)
 
 Prefer the `SHIPPO_API_KEY` environment variable so the key is not visible in the process list or persisted into client config:
@@ -147,11 +153,16 @@ SHIPPO_API_KEY=<your-shippo-key> npx -y @shippo/shippo-mcp
 
 The `--api-key=shippo_test_xxxxx` flag also works, but the key is then visible to other local users in the process list, so reserve it for throwaway test keys.
 
+-->
+
 ### Flags
+
+<!-- API-KEY-AUTH: restore this row to the table when the key door ships:
+| `SHIPPO_API_KEY` (env, preferred) or `--api-key=<key>` | Use a Shippo API key instead of OAuth. |
+-->
 
 | Flag | Purpose |
 |------|---------|
-| `SHIPPO_API_KEY` (env, preferred) or `--api-key=<key>` | Use a Shippo API key instead of OAuth. |
 | `--url=<url>` | Override the server (default `https://mcp.shippo.com`). Must be `https`, except `localhost` for local testing, since credentials are sent to it. |
 | `--shippo-account=<id>` | Act on a managed account (sends `SHIPPO-ACCOUNT-ID`). |
 | `--callback-port=<n>` | Pin the OAuth loopback callback port (integer 1024-65535). By default it is derived deterministically per host, so re-authorization keeps matching the registered redirect. |
@@ -226,9 +237,13 @@ which npx   # Should point to v20 or v18 path
 
 Then restart your MCP client (Cursor/Claude Desktop).
 
+<!-- API-KEY-AUTH (hidden until the hosted key door ships; the workaround is API-key auth):
+
 ### Sign-in does not open a browser (headless / SSH)
 
 OAuth needs a local browser and a loopback callback on the same machine. In CI, containers, or an SSH session with no display, sign-in cannot complete. Use an API key instead: `SHIPPO_API_KEY=<your-shippo-key>`.
+
+-->
 
 ### Reset sign-in
 
@@ -288,7 +303,10 @@ OAuth session state (registered client, tokens, PKCE verifier) is cached under `
 
 ### Authentication
 
-- **OAuth (default)**: sign in through your browser. No API key is stored; the session is cached locally under `~/.shippo-mcp` and can be reset by deleting that directory.
+- **OAuth**: sign in through your browser. No API key is stored; the session is cached locally under `~/.shippo-mcp` and can be reset by deleting that directory.
+
+<!-- API-KEY-AUTH (hidden until the hosted key door ships; the code path stays live, this is docs-only):
+
 - **API key (optional)**: for headless and automation use. Prefer the `SHIPPO_API_KEY` environment variable over the `--api-key` flag so the key stays out of the process list.
 
 ### API Key Management
@@ -311,6 +329,8 @@ OAuth session state (registered client, tokens, PKCE verifier) is cached under `
 - Rotate keys regularly
 - Never share keys publicly
 - Store sensitive configuration in environment variables
+
+-->
 
 ## Contributions
 

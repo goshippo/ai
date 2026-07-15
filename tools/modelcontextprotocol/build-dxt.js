@@ -6,6 +6,24 @@ import esbuild from 'esbuild';
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { packExtension } from '@anthropic-ai/dxt';
 
+// API-KEY-AUTH (hidden until the hosted key door ships): manifest.json is pure
+// OAuth today. JSON has no comments, so the optional API-key config lives here.
+// When the key door ships, add this back to manifest.json as a top-level
+// "user_config" and set server.mcp_config.env accordingly:
+//
+//   "user_config": {
+//     "shippo_api_key": {
+//       "type": "string",
+//       "title": "Shippo API key (optional)",
+//       "description": "Leave blank to sign in with OAuth in your browser (recommended). Or paste a Shippo API key (shippo_test_... or shippo_live_...) for headless / API-key use once the hosted key door is enabled.",
+//       "sensitive": true,
+//       "required": false,
+//       "multiple": false
+//     }
+//   },
+//   ... and inside server.mcp_config:
+//   "env": { "SHIPPO_API_KEY": "${user_config.shippo_api_key}" }
+
 if (!existsSync('dxt-dist')) mkdirSync('dxt-dist');
 
 await esbuild.build({

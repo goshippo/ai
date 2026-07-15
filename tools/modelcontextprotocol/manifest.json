@@ -9,25 +9,12 @@
     "email": "support@goshippo.com"
   },
   "documentation": "https://docs.goshippo.com/docs/Guides_general/MCPServer",
-  "user_config": {
-    "shippo_api_key": {
-      "type": "string",
-      "title": "Shippo API key (optional)",
-      "description": "Leave blank to sign in with OAuth in your browser (recommended). Or paste a Shippo API key (shippo_test_... or shippo_live_...) for headless / API-key use once the hosted key door is enabled.",
-      "sensitive": true,
-      "required": false,
-      "multiple": false
-    }
-  },
   "server": {
     "type": "node",
     "entry_point": "dxt-dist/index.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dxt-dist/index.js"],
-      "env": {
-        "SHIPPO_API_KEY": "${user_config.shippo_api_key}"
-      }
+      "args": ["${__dirname}/dxt-dist/index.js"]
     }
   },
   "tools": [
