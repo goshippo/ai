@@ -80,7 +80,11 @@ claude mcp remove shippo-mcp
 <details>
 <summary>Claude Desktop</summary>
 
-**One-click (recommended):** install the Desktop Extension. Download `shippo.dxt` from the [releases](https://github.com/goshippo/ai/releases) (or build it with `npm run build-dxt`), then open it in Claude Desktop. It signs in with OAuth on first use, so there is nothing to configure.
+**Desktop Extension (recommended):**
+
+[![Add to Claude Desktop](https://img.shields.io/badge/Add_to_Claude_Desktop-Download_.dxt-d97757?style=for-the-badge&logo=anthropic&logoColor=white)](https://github.com/goshippo/ai/releases/download/shippo-mcp-v3.0.0/shippo.dxt)
+
+Click to download `shippo.dxt`, then open it in Claude Desktop to install (or Settings -> Extensions -> Advanced -> Install Extension). It signs in with OAuth on first use, so there is nothing to configure. You can also build it yourself with `npm run build-dxt`.
 
 **Manual config:** Settings -> Developer -> Edit Config, then paste:
 
