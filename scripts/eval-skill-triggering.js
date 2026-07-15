@@ -429,7 +429,13 @@ function formatMarkdown(summary, results, opts) {
     d.push('**Model response:**');
     d.push('');
     d.push('```');
-    d.push((r.response && r.response.length ? r.response : '(no text response captured)'));
+    d.push(
+      r.response && r.response.length
+        ? r.response
+        : r.activated
+          ? `(activated ${r.activated}; the model called the skill with no preamble text)`
+          : '(no assistant text emitted)',
+    );
     d.push('```');
     return d.join('\n');
   };

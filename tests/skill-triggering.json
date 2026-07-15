@@ -105,7 +105,7 @@
     "should_trigger": true,
     "prompts": [
       "Analyze our shipping spend last quarter and find which carriers cost the most",
-      "Compare USPS, UPS, and FedEx pricing for our typical 3lb package across 50 destinations",
+      "Analyze our shipping spend: for a typical 3 lb 12x9x6 in box shipped nationwide, which of USPS, UPS, or FedEx is cheapest and where can we cut cost?",
       "Optimize our package dimensions to reduce dimensional-weight surcharges",
       "Review our historical Shippo shipments and recommend a cheaper carrier mix",
       "Run a geographic cost analysis: ship from Reno vs Memphis to top 10 metro areas"
@@ -128,7 +128,7 @@
       "What's the right Shippo integration pattern for a bulk fulfillment pipeline?",
       "Review my Shippo integration design, am I using v1 or v2 address fields correctly?",
       "Help me plan a Shippo integration for an e-commerce site with international shipping",
-      "What are the best practices for confirming live label purchases in our Shippo workflow?"
+      "What does Shippo recommend as best practices to prevent accidental live-label charges in our integration?"
     ]
   },
   {
