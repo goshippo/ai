@@ -474,12 +474,16 @@ See the "CSV Batch Format Specification" section in the Reference Guides below f
 3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See the "Customs Declaration Guide" section in the Reference Guides below. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
 4. Build the `batch_shipments` array with inline address and parcel objects per row.
 5. Call `CreateBatch` with the array.
-6. Poll `GetBatch` until status changes from `VALIDATING` to `VALID`. See Polling Intervals below.
-7. Review per-shipment validation results. Report failures before proceeding.
+6. Poll `GetBatch` until status is `VALID` or `INVALID`. See Polling Intervals below.
+7. If the status is `INVALID`, some batch shipments failed validation: see "Fixing an INVALID batch" below, fix them, and re-poll until `VALID`. Report per-shipment failures either way before proceeding.
 8. **Confirm purchase** (see Purchase Confirmation Gate above).
 9. Call `PurchaseBatch` to buy labels for all valid shipments.
 10. Poll `GetBatch` until status changes from `PURCHASING` to `PURCHASED`. See Polling Intervals below.
 11. Report: total attempted, succeeded, failed. For successes: tracking_number and label_url (complete URL). For failures: error messages.
+
+#### Retrieving batch labels
+
+A purchased batch does not put each label URL inline on the batch object. Each entry in `batch_shipments[]` carries a `transaction` field, which is a Transaction object_id. Call `GetTransaction` on it to get that shipment's `label_url` and `tracking_number`. The batch-level `label_url` is a merged multi-label PDF (up to 100 labels per file) and cannot be split per order.
 
 #### Batch Size Guidance
 
@@ -509,6 +513,19 @@ For batches over 500 shipments, consider splitting into multiple batches. Large 
 
 - Add shipments: `AddShipmentsToBatch` (before purchase only). Note: adding an invalid shipment will change the entire batch status to `INVALID`. Check per-shipment statuses after adding.
 - Remove shipments: `RemoveShipmentsFromBatch` (before purchase only).
+
+---
+
+### Fixing an INVALID batch
+
+If `GetBatch` returns status `INVALID`, one or more batch shipments failed validation and the batch cannot be purchased until they are fixed.
+
+1. **Find the failures.** Call `GetBatch` with `object_results=creation_failed` to return only the failed shipments (paginate with `?page=` if there are many), or read each `batch_shipments[].status` (`VALID` / `INVALID` / `INCOMPLETE` / `TRANSACTION_FAILED`) and its `messages` for the reason. The batch-level `errors` array collects the same per-shipment failures in one place.
+2. **Fix them,** either:
+   - Remove: `RemoveShipmentsFromBatch` with the failed batch-shipment `object_id`s (from `batch_shipments[].object_id`, not the shipment object_id) to drop them, or
+   - Correct and re-add: `AddShipmentsToBatch` with corrected shipment objects (fixed address, parcel, or servicelevel).
+3. **Re-poll `GetBatch`** until status is `VALID`.
+4. Then **confirm purchase** (see Purchase Confirmation Gate) and `PurchaseBatch`.
 
 ---
 
@@ -2318,10 +2335,13 @@ Create a new batch of shipments. **Async:** returns immediately with status `VAL
 #### `GetBatch`
 Retrieve a batch by ID. Includes status and per-shipment results.
 - **Required:** `BatchId` (string)
+- **Optional:** `object_results` (string) filters `batch_shipments` by per-shipment result -- e.g. `creation_failed`, `creation_succeeded`, `purchase_failed`, `purchase_succeeded` -- to pull just the failed shipments out of a large batch.
+- On `INVALID`, the actionable validation errors are the per-shipment `batch_shipments[].messages`, not a batch-level message.
 
 #### `PurchaseBatch`
 Purchase labels for all valid shipments in a batch. **Async:** triggers purchase; poll `GetBatch` until status is `PURCHASED`.
 - **Required:** `BatchId` (string)
+- **Retrieving labels:** a purchased batch does not put each label URL inline on the batch. Each `batch_shipments[].transaction` is a Transaction object_id; call `GetTransaction` on it for that shipment's `label_url` and `tracking_number`. The batch-level `label_url` is a merged multi-label PDF (up to 100 labels per file) that cannot be split per order.
 
 #### `AddShipmentsToBatch`
 Add shipments to an existing batch (before purchase only).
