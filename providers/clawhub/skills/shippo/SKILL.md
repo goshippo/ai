@@ -476,8 +476,8 @@ See `shippo/references/csv-format.md` for the column specification.
 3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See `shippo/references/customs-guide.md`. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
 4. Build the `batch_shipments` array with inline address and parcel objects per row.
 5. Call `CreateBatch` with the array.
-6. Poll `GetBatch` until status changes from `VALIDATING` to `VALID`. See Polling Intervals below.
-7. Review per-shipment validation results. Report failures before proceeding.
+6. Poll `GetBatch` until status is `VALID` or `INVALID`. See Polling Intervals below.
+7. If the status is `INVALID`, some batch shipments failed validation: see "Fixing an INVALID batch" below, fix them, and re-poll until `VALID`. Report per-shipment failures either way before proceeding.
 8. **Confirm purchase** (see Purchase Confirmation Gate above).
 9. Call `PurchaseBatch` to buy labels for all valid shipments.
 10. Poll `GetBatch` until status changes from `PURCHASING` to `PURCHASED`. See Polling Intervals below.
@@ -515,6 +515,19 @@ For batches over 500 shipments, consider splitting into multiple batches. Large 
 
 - Add shipments: `AddShipmentsToBatch` (before purchase only). Note: adding an invalid shipment will change the entire batch status to `INVALID`. Check per-shipment statuses after adding.
 - Remove shipments: `RemoveShipmentsFromBatch` (before purchase only).
+
+---
+
+### Fixing an INVALID batch
+
+If `GetBatch` returns status `INVALID`, one or more batch shipments failed validation and the batch cannot be purchased until they are fixed.
+
+1. **Find the failures.** Call `GetBatch` with `object_results=creation_failed` to return only the failed shipments (paginate with `?page=` if there are many), or read each `batch_shipments[].status` (`VALID` / `INVALID` / `INCOMPLETE` / `TRANSACTION_FAILED`) and its `messages` for the reason. The batch-level `errors` array collects the same per-shipment failures in one place.
+2. **Fix them,** either:
+   - Remove: `RemoveShipmentsFromBatch` with the failed batch-shipment `object_id`s (from `batch_shipments[].object_id`, not the shipment object_id) to drop them, or
+   - Correct and re-add: `AddShipmentsToBatch` with corrected shipment objects (fixed address, parcel, or servicelevel).
+3. **Re-poll `GetBatch`** until status is `VALID`.
+4. Then **confirm purchase** (see Purchase Confirmation Gate) and `PurchaseBatch`.
 
 ---
 
