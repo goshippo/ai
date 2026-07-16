@@ -29,7 +29,7 @@
     {
       "registryType": "npm",
       "identifier": "@shippo/shippo-mcp",
-      "version": "3.0.1",
+      "version": "3.0.2",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

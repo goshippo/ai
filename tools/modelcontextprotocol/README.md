@@ -1,6 +1,6 @@
-# <img src="https://raw.githubusercontent.com/goshippo/ai/main/tools/modelcontextprotocol/assets/shippo-logo.png" width="30" alt="Shippo logo"> Shippo MCP Server
+# <img src="https://cdn.prod.website-files.com/6462967bbf70fa5b5b227351/646bd3ac70ee08fca9869afe_shippo-logo-dark.svg" width="30" alt="Shippo logo"> Shippo MCP Server
 
-> **Note:** This package is a thin **local bridge** to the hosted Shippo MCP server at `https://mcp.shippo.com`. It runs over stdio for MCP clients that connect to a local command, and signs you in with **OAuth** in your browser (no API key required). Tool discovery and execution happen on the hosted server, so the local tool surface always matches hosted. If your client speaks remote MCP with OAuth, you can connect to `https://mcp.shippo.com` directly instead of using this package.
+> ![NOTE](https://img.shields.io/badge/NOTE-ffd21e?style=flat-square) This package is a thin **local bridge** to the hosted Shippo MCP server at `https://mcp.shippo.com`. It runs over stdio for MCP clients that connect to a local command, and signs you in with **OAuth** in your browser (no API key required). Tool discovery and execution happen on the hosted server, so the local tool surface always matches hosted. If your client speaks remote MCP with OAuth, you can connect to `https://mcp.shippo.com` directly instead of using this package.
 
 Model Context Protocol (MCP) Server for the Shippo API.
 
@@ -85,7 +85,7 @@ claude mcp remove shippo-mcp
 
 **Desktop Extension (recommended):**
 
-[![Add to Claude Desktop](https://img.shields.io/badge/Add_to_Claude_Desktop-Download_.dxt-d97757?style=for-the-badge&logo=anthropic&logoColor=white)](https://github.com/goshippo/ai/releases/download/shippo-mcp-v3.0.1/shippo.dxt)
+[![Add to Claude Desktop](https://img.shields.io/badge/Add_to_Claude_Desktop-Download_.dxt-d97757?style=for-the-badge&logo=anthropic&logoColor=white)](https://github.com/goshippo/ai/releases/download/shippo-mcp-v3.0.2/shippo.dxt)
 
 Click to download `shippo.dxt`, then open it in Claude Desktop to install (or Settings -> Extensions -> Advanced -> Install Extension). It signs in with OAuth on first use, so there is nothing to configure. You can also build it yourself with `npm run build-dxt`.
 
