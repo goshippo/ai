@@ -1,6 +1,6 @@
 {
   "name": "@goshippo/ai",
-  "version": "1.5.1",
+  "version": "1.5.3",
   "description": "Shippo's AI distribution surfaces: Claude Code plugin, ClawHub skill, and future provider channels.",
   "private": true,
   "homepage": "https://github.com/goshippo/ai",

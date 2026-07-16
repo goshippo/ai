@@ -75,6 +75,8 @@ Read the relevant skill or reference before answering integration questions or w
 - **Parcel dimensions and weight must be strings, not numbers.** Use `"10"`, never `10`.
 - **Label URLs are S3 signed URLs.** Always display the complete URL, truncating breaks the signature.
 - **Rates expire after 7 days.** Re-create the shipment for fresh rates.
+- **By-id parameter names are case-sensitive** (mostly PascalCase: `ShipmentId`, `TransactionId`, `OrderId`). Use the exact name from `shippo_describe_tool`; do not guess snake_case.
+- **Never retry a 403/404 tool error with the same arguments.** Ownership and not-found errors are permanent for those inputs; verify the ID via the matching `List*` operation first. The generic `An internal error occurred. Please retry later.` relay most often traces to an input issue too, so verify inputs before retrying, and retry the identical call at most once.
 
 ### Response handling
 
@@ -472,12 +474,16 @@ See the "CSV Batch Format Specification" section in the Reference Guides below f
 3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See the "Customs Declaration Guide" section in the Reference Guides below. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
 4. Build the `batch_shipments` array with inline address and parcel objects per row.
 5. Call `CreateBatch` with the array.
-6. Poll `GetBatch` until status changes from `VALIDATING` to `VALID`. See Polling Intervals below.
-7. Review per-shipment validation results. Report failures before proceeding.
+6. Poll `GetBatch` until status is `VALID` or `INVALID`. See Polling Intervals below.
+7. If the status is `INVALID`, some batch shipments failed validation: see "Fixing an INVALID batch" below, fix them, and re-poll until `VALID`. Report per-shipment failures either way before proceeding.
 8. **Confirm purchase** (see Purchase Confirmation Gate above).
 9. Call `PurchaseBatch` to buy labels for all valid shipments.
 10. Poll `GetBatch` until status changes from `PURCHASING` to `PURCHASED`. See Polling Intervals below.
 11. Report: total attempted, succeeded, failed. For successes: tracking_number and label_url (complete URL). For failures: error messages.
+
+#### Retrieving batch labels
+
+A purchased batch does not put each label URL inline on the batch object. Each entry in `batch_shipments[]` carries a `transaction` field, which is a Transaction object_id. Call `GetTransaction` on it to get that shipment's `label_url` and `tracking_number`. The batch-level `label_url` is a merged multi-label PDF (up to 100 labels per file) and cannot be split per order.
 
 #### Batch Size Guidance
 
@@ -507,6 +513,19 @@ For batches over 500 shipments, consider splitting into multiple batches. Large 
 
 - Add shipments: `AddShipmentsToBatch` (before purchase only). Note: adding an invalid shipment will change the entire batch status to `INVALID`. Check per-shipment statuses after adding.
 - Remove shipments: `RemoveShipmentsFromBatch` (before purchase only).
+
+---
+
+### Fixing an INVALID batch
+
+If `GetBatch` returns status `INVALID`, one or more batch shipments failed validation and the batch cannot be purchased until they are fixed.
+
+1. **Find the failures.** Call `GetBatch` with `object_results=creation_failed` to return only the failed shipments (paginate with `?page=` if there are many), or read each `batch_shipments[].status` (`VALID` / `INVALID` / `INCOMPLETE` / `TRANSACTION_FAILED`) and its `messages` for the reason. The batch-level `errors` array collects the same per-shipment failures in one place.
+2. **Fix them,** either:
+   - Remove: `RemoveShipmentsFromBatch` with the failed batch-shipment `object_id`s (from `batch_shipments[].object_id`, not the shipment object_id) to drop them, or
+   - Correct and re-add: `AddShipmentsToBatch` with corrected shipment objects (fixed address, parcel, or servicelevel).
+3. **Re-poll `GetBatch`** until status is `VALID`.
+4. Then **confirm purchase** (see Purchase Confirmation Gate) and `PurchaseBatch`.
 
 ---
 
@@ -2089,9 +2108,19 @@ Common Shippo API errors, their causes, and recovery steps.
 - **Recovery:** Re-authorize the Shippo MCP OAuth session. Re-authorize the Shippo connector in your client, then sign in. Confirm the authorized account has access to the resource.
 
 #### Object not found
-- **Pattern:** A valid-looking object ID returns a not-found error.
-- **Cause:** The object does not exist on the authorized account, or it belongs to a different account.
-- **Recovery:** Confirm you are signed in to the account that owns the object.
+- **Pattern:** A valid-looking object ID returns a not-found error, e.g. `API request failed with status: 404 - {"detail":"Not found."}`.
+- **Cause:** The object does not exist on the authorized account, or it belongs to a different account. IDs are type-specific: a rate `object_id` is not a transaction ID.
+- **Recovery:** **Permanent for these inputs; do not retry the identical call.** Verify the ID via the matching `List*` operation (e.g. `ListCarrierAccounts` before `GetCarrierAccount`), then confirm you are signed in to the account that owns the object.
+
+#### Permission denied
+- **Pattern:** `API request failed with status: 403 - {"detail":"You do not have permission to perform this action."}`
+- **Cause:** The object exists but belongs to another account (or a platform sub-account) the authorized token cannot read. This is an ownership check, not a transient failure.
+- **Recovery:** **Permanent for these inputs; never retry the identical call.** Verify the ID came from a `List*` call on this account. If the user manages platform sub-accounts, the object may live on a sub-account the MCP session cannot see.
+
+#### Generic gateway errors
+- **Pattern:** `An internal error occurred. Please retry later.` on a tool result.
+- **Cause:** This is the gateway's catch-all relay message, and it covers input-side conditions as well as transient ones. In practice the most common cause is an input issue: an object ID that is not visible to the authorized account or is the wrong ID type.
+- **Recovery:** Verify the inputs first: confirm the ID via the matching `List*` operation, or check the schema with `shippo_describe_tool`. If the inputs check out, retry once; a second identical failure means stop and report.
 
 ---
 
@@ -2099,6 +2128,8 @@ Common Shippo API errors, their causes, and recovery steps.
 
 - **Never guess** parcel dimensions, weight, customs values, HS codes, or signer names. Always ask the user.
 - **Do not auto-retry** transport, auth, or rate-limit errors. Report the error to the user and stop.
+- **Never retry 403/404 tool errors with the same arguments.** They are permanent for those inputs; fix the ID or account first.
+- The server may append a `[shippo-mcp] ...` guidance block to error results; follow it, it names the exact expected field or the recommended next call.
 
 ---
 
@@ -2127,9 +2158,9 @@ Status 404 Content-Type application/json Body: {"detail":"Not found."}
 
 These typically indicate the upstream Shippo API returned an unexpected shape (e.g. a 404 on a tracking lookup the SDK didn't anticipate). Report the plaintext body to the user verbatim, it carries the actual error detail.
 
-#### Argument-validation errors (JSON-RPC `-32602`)
+#### Argument-validation errors
 
-Pre-call validation failures (missing required field, type mismatch) return JSON-RPC error code `-32602` ("Invalid params") with a `message` field describing the failure. These are MCP-client-side; correct the arguments and retry.
+On the hosted server, pre-call validation failures (missing required field, type mismatch) surface as a tool result with `isError: true` whose text starts with `Parameter validation failed: Invalid request parameters: ...` and names the offending field, e.g. `Missing required field(s): 'ShipmentId'`. Parameter names are exact and **case-sensitive** (see the naming note in [tool-reference](tool-reference.md)); when a required field looks "missing" but you passed it, check the casing, then call `shippo_describe_tool` for the exact schema. The call never reached Shippo; correct the arguments and retry once. (Standalone/legacy servers may instead return JSON-RPC error code `-32602` with the same meaning.)
 
 #### Handling both paths
 
@@ -2176,6 +2207,8 @@ Reference for the Shippo operations callable through the hosted MCP server, grou
 
 **Data type note:** Dimensions (length, width, height) and weight values must be passed as **strings**, not numbers (e.g., `"12"` not `12`). This applies to parcels, customs items, and all weight/dimension fields.
 
+**Parameter naming note:** Parameter names are **case-sensitive**, and the by-id operations use the exact spelling returned by `shippo_describe_tool` -- mostly PascalCase (`ShipmentId`, `OrderId`, `TransactionId`, `BatchId`, `CarrierAccountId`), with a few exceptions (`webhookId`, and v2 address operations use `address_id`). Body and query fields are snake_case. When unsure, call `shippo_describe_tool` first rather than guessing a casing.
+
 ---
 
 ### Addresses
@@ -2198,7 +2231,7 @@ Parse a freeform address string into structured components. Returns v2 field nam
 
 #### `ValidateAddressByID` (legacy)
 Validate an existing address by object ID using v1 field names.
-- **Required:** `address_id` (string)
+- **Required:** `AddressId` (string)
 
 #### `GetAddress`
 Retrieve a previously created address by ID.
@@ -2220,7 +2253,7 @@ Create a new shipment and retrieve available rates. **Async:** if `async` is tru
 
 #### `GetShipment`
 Retrieve a shipment by ID. Use to poll for rates after async creation.
-- **Required:** `shipment_id` (string)
+- **Required:** `ShipmentId` (string)
 
 #### `ListShipments`
 List all shipments. Supports pagination.
@@ -2228,7 +2261,7 @@ List all shipments. Supports pagination.
 
 #### `ListShipmentRates`
 Retrieve rates for an existing shipment by ID.
-- **Required:** `shipment_id` (string)
+- **Required:** `ShipmentId` (string)
 
 ---
 
@@ -2236,11 +2269,11 @@ Retrieve rates for an existing shipment by ID.
 
 #### `GetRate`
 Retrieve a specific rate by ID.
-- **Required:** `rate_id` (string)
+- **Required:** `RateId` (string)
 
 #### `ListShipmentRatesByCurrencyCode`
 Retrieve shipment rates filtered to a specific currency.
-- **Required:** `shipment_id` (string), `currency_code` (string, ISO 4217 e.g., `USD`)
+- **Required:** `ShipmentId` (string), `CurrencyCode` (string, ISO 4217 e.g., `USD`)
 - **Optional:** `page` (integer), `results` (integer)
 
 #### `CreateLiveRate`
@@ -2270,7 +2303,7 @@ Purchase a shipping label from an existing rate. **Async:** returns immediately 
 
 #### `GetTransaction`
 Retrieve a transaction (label) by ID. Use to poll async label purchases.
-- **Required:** `transaction_id` (string)
+- **Required:** `TransactionId` (string)
 
 #### `ListTransactions`
 List all transactions. Supports filtering and pagination.
@@ -2282,7 +2315,7 @@ List all transactions. Supports filtering and pagination.
 
 #### `GetTrack`
 Get current tracking status for a carrier + tracking number.
-- **Required:** `carrier` (string, carrier token e.g., `usps`, `ups`, `fedex`, `dhl_express`), `tracking_number` (string)
+- **Required:** `Carrier` (string, carrier token e.g., `usps`, `ups`, `fedex`, `dhl_express`), `TrackingNumber` (string)
 
 #### `CreateTrack`
 Register a shipment for tracking webhook notifications.
@@ -2301,19 +2334,22 @@ Create a new batch of shipments. **Async:** returns immediately with status `VAL
 
 #### `GetBatch`
 Retrieve a batch by ID. Includes status and per-shipment results.
-- **Required:** `batch_id` (string)
+- **Required:** `BatchId` (string)
+- **Optional:** `object_results` (string) filters `batch_shipments` by per-shipment result -- e.g. `creation_failed`, `creation_succeeded`, `purchase_failed`, `purchase_succeeded` -- to pull just the failed shipments out of a large batch.
+- On `INVALID`, the actionable validation errors are the per-shipment `batch_shipments[].messages`, not a batch-level message.
 
 #### `PurchaseBatch`
 Purchase labels for all valid shipments in a batch. **Async:** triggers purchase; poll `GetBatch` until status is `PURCHASED`.
-- **Required:** `batch_id` (string)
+- **Required:** `BatchId` (string)
+- **Retrieving labels:** a purchased batch does not put each label URL inline on the batch. Each `batch_shipments[].transaction` is a Transaction object_id; call `GetTransaction` on it for that shipment's `label_url` and `tracking_number`. The batch-level `label_url` is a merged multi-label PDF (up to 100 labels per file) that cannot be split per order.
 
 #### `AddShipmentsToBatch`
 Add shipments to an existing batch (before purchase only).
-- **Required:** `batch_id` (string), `body` (array of batch shipment objects)
+- **Required:** `BatchId` (string), `body` (array of batch shipment objects)
 
 #### `RemoveShipmentsFromBatch`
 Remove shipments from an existing batch (before purchase only).
-- **Required:** `batch_id` (string), `shipment_ids` (array of string IDs)
+- **Required:** `BatchId` (string), `shipment_ids` (array of string IDs, in the request body)
 
 ---
 
@@ -2326,7 +2362,7 @@ Create a customs declaration for international shipments.
 
 #### `GetCustomsDeclaration`
 Retrieve a customs declaration by ID.
-- **Required:** `customs_declaration_id` (string)
+- **Required:** `CustomsDeclarationId` (string)
 
 #### `ListCustomsDeclarations`
 List all customs declarations. Supports pagination.
@@ -2339,7 +2375,7 @@ Create a customs item (individual line item within a declaration).
 
 #### `GetCustomsItem`
 Retrieve a customs item by ID.
-- **Required:** `customs_item_id` (string)
+- **Required:** `CustomsItemId` (string)
 
 #### `ListCustomsItems`
 List all customs items. Supports pagination.
@@ -2356,7 +2392,7 @@ Create an end-of-day manifest (SCAN form) for carrier pickup. **Async:** returns
 
 #### `GetManifest`
 Retrieve a manifest by ID.
-- **Required:** `manifest_id` (string)
+- **Required:** `ManifestId` (string)
 
 #### `ListManifests`
 List all manifests. Supports pagination.
@@ -2373,7 +2409,7 @@ Create a new parcel object.
 
 #### `GetParcel`
 Retrieve an existing parcel by ID.
-- **Required:** `parcel_id` (string)
+- **Required:** `ParcelId` (string)
 
 #### `ListParcels`
 List all parcels. Supports pagination.
@@ -2389,7 +2425,7 @@ List all carrier-provided parcel templates (e.g., USPS Flat Rate). Filterable by
 
 #### `GetCarrierParcelTemplate`
 Retrieve a specific carrier parcel template.
-- **Required:** `carrier_parcel_template_id` (string)
+- **Required:** `CarrierParcelTemplateToken` (string)
 
 #### `ListUserParcelTemplates`
 List all user-created parcel templates. No required parameters.
@@ -2401,16 +2437,16 @@ Create a new user parcel template.
 
 #### `GetUserParcelTemplate`
 Retrieve a user parcel template by ID.
-- **Required:** `user_parcel_template_id` (string)
+- **Required:** `UserParcelTemplateObjectId` (string)
 
 #### `UpdateUserParcelTemplate`
 Update an existing user parcel template.
-- **Required:** `user_parcel_template_id` (string)
+- **Required:** `UserParcelTemplateObjectId` (string)
 - **Optional:** Same fields as create
 
 #### `DeleteUserParcelTemplate`
 Delete a user parcel template.
-- **Required:** `user_parcel_template_id` (string)
+- **Required:** `UserParcelTemplateObjectId` (string)
 
 ---
 
@@ -2426,11 +2462,11 @@ Create a new carrier account.
 
 #### `GetCarrierAccount`
 Retrieve a carrier account by ID.
-- **Required:** `carrier_account_id` (string)
+- **Required:** `CarrierAccountId` (string)
 
 #### `UpdateCarrierAccount`
 Update a carrier account.
-- **Required:** `carrier_account_id` (string)
+- **Required:** `CarrierAccountId` (string)
 - **Optional:** `account_id` (string), `parameters` (object)
 
 #### `GetCarrierRegistrationStatus`
@@ -2439,7 +2475,7 @@ Get carrier registration status.
 
 #### `InitiateOauth2Signin`
 Connect a carrier account using OAuth 2.0.
-- **Required:** `carrier_account_id` (string), `redirect_url` (string)
+- **Required:** `CarrierAccountObjectId` (string), `redirect_uri` (string)
 
 ---
 
@@ -2452,7 +2488,7 @@ Create a new order.
 
 #### `GetOrder`
 Retrieve an order by ID.
-- **Required:** `order_id` (string)
+- **Required:** `OrderId` (string)
 
 #### `ListOrders`
 List all orders. Supports pagination.
@@ -2472,7 +2508,7 @@ Create a refund (void a label). Must be requested within 30 days of purchase for
 
 #### `GetRefund`
 Retrieve a refund by ID.
-- **Required:** `refund_id` (string)
+- **Required:** `RefundId` (string)
 
 #### `ListRefunds`
 List all refunds. Supports pagination.
@@ -2500,12 +2536,12 @@ Create a new service group.
 
 #### `UpdateServiceGroup`
 Update an existing service group.
-- **Required:** `service_group_id` (string)
+- **Required:** `object_id` (string, service group ID, in the request body)
 - **Optional:** Same fields as create
 
 #### `DeleteServiceGroup`
 Delete a service group.
-- **Required:** `service_group_id` (string)
+- **Required:** `ServiceGroupId` (string)
 
 ---
 
@@ -2518,19 +2554,19 @@ Create a new webhook subscription.
 
 #### `getWebhook`
 Retrieve a specific webhook.
-- **Required:** `webhook_id` (string)
+- **Required:** `webhookId` (string)
 
 #### `listWebhooks`
 List all webhooks. No required parameters.
 
 #### `updateWebhook`
 Update an existing webhook.
-- **Required:** `webhook_id` (string)
+- **Required:** `webhookId` (string)
 - **Optional:** `url` (string), `event` (string), `is_test` (boolean), `active` (boolean)
 
 #### `deleteWebhook`
 Delete a webhook.
-- **Required:** `webhook_id` (string)
+- **Required:** `webhookId` (string)
 
 ---
 
@@ -2546,11 +2582,11 @@ Create a Shippo account.
 
 #### `GetShippoAccount`
 Retrieve a Shippo account.
-- **Required:** `shippo_account_id` (string)
+- **Required:** `ShippoAccountId` (string)
 
 #### `UpdateShippoAccount`
 Update a Shippo account.
-- **Required:** `shippo_account_id` (string)
+- **Required:** `ShippoAccountId` (string)
 - **Optional:** `email` (string), `first_name` (string), `last_name` (string), `company_name` (string)
 
 ---
