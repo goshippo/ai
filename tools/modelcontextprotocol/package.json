@@ -1,7 +1,7 @@
 {
   "name": "@shippo/shippo-mcp",
   "mcpName": "com.shippo/shippo-mcp",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Multi-carrier shipping for AI agents: compare rates, buy labels, track packages, validate addresses. Local bridge to the hosted Shippo MCP server.",
   "license": "MIT",
   "repository": {
