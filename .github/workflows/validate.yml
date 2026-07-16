@@ -459,6 +459,10 @@ jobs:
 
       - name: Post validate summary to the PR
         if: ${{ always() && github.event_name == 'pull_request' }}
+        # Cosmetic sticky comment; the validation steps above are the gate.
+        # continue-on-error so a GitHub API blip (503 fetching PR comments,
+        # observed 3x on 2026-07-16) cannot fail an otherwise-passing check.
+        continue-on-error: true
         uses: actions/github-script@v9
         with:
           script: |
