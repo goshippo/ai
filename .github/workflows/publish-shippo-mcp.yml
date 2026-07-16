@@ -1,14 +1,17 @@
-name: Publish @shippo/shippo-mcp
+name: Release @shippo/shippo-mcp (.dxt)
 on:
   workflow_dispatch:
   push:
     tags: ['shippo-mcp-v*']
-# contents: write so the tagged run can create a GitHub release and attach the
-# .dxt, which the README's "Add to Claude Desktop" button links to.
+# npm publishing is intentionally NOT automated: the maintainer runs
+# `npm publish` manually from a verified local checkout. This workflow only
+# verifies the tagged code and publishes the GitHub release with the .dxt,
+# which the README's "Add to Claude Desktop" button links to.
+# contents: write so the tagged run can create that release.
 permissions:
   contents: write
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -18,14 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npm publish --ignore-scripts --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_SHIPPO }}
       # Build the Desktop Extension and publish it as the tag's release asset, so
       # the README download button (releases/download/<tag>/shippo.dxt) resolves.
       # Only on a tag push (a release needs a tag); skipped on workflow_dispatch.
