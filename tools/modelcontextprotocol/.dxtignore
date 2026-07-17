@@ -1,0 +1,9 @@
+node_modules/
+src/
+test/
+dist/
+tsconfig.json
+tsup.config.ts
+build-dxt.js
+package-lock.json
+.gitignore

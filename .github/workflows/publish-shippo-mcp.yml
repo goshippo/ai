@@ -1,0 +1,40 @@
+name: Release @shippo/shippo-mcp (.dxt)
+on:
+  workflow_dispatch:
+  push:
+    tags: ['shippo-mcp-v*']
+# npm publishing is intentionally NOT automated: the maintainer runs
+# `npm publish` manually from a verified local checkout. This workflow only
+# verifies the tagged code and publishes the GitHub release with the .dxt,
+# which the README's "Add to Claude Desktop" button links to.
+# contents: write so the tagged run can create that release.
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/modelcontextprotocol
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Build the Desktop Extension and publish it as the tag's release asset, so
+      # the README download button (releases/download/<tag>/shippo.dxt) resolves.
+      # Only on a tag push (a release needs a tag); skipped on workflow_dispatch.
+      - if: startsWith(github.ref, 'refs/tags/')
+        run: npm run build-dxt
+      - if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" shippo.dxt \
+            --title "@shippo/shippo-mcp $GITHUB_REF_NAME" \
+            --notes "Local bridge to the hosted Shippo MCP server. To install in Claude Desktop, download shippo.dxt and open it." \
+          || gh release upload "$GITHUB_REF_NAME" shippo.dxt --clobber
