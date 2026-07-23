@@ -13,9 +13,9 @@ on:
 # the .dxt on the "latest" release for the docs download URL.
 # CI NEVER releases to npm. The npm-stage job runs only when a maintainer
 # manually dispatches this workflow with the npm_tag input set, then pauses
-# at the npm-publish environment for required-reviewer approval, and the
+# at the npm-stage-publish environment for required-reviewer approval, and the
 # npm Trusted Publisher (goshippo/ai + this filename + environment
-# npm-publish) is restricted to the STAGE action: the upload lands as a
+# npm-stage-publish) is restricted to the STAGE action: the upload lands as a
 # staged version that a maintainer must release on npmjs.com. Triple gate,
 # no long-lived npm token anywhere.
 # contents: write so the tagged run can create that release.
@@ -68,7 +68,7 @@ jobs:
           fi
   npm-stage:
     # Dispatch-only, triple-gated: (1) a maintainer must manually run this
-    # workflow with npm_tag set; (2) the npm-publish environment's required
+    # workflow with npm_tag set; (2) the npm-stage-publish environment's required
     # reviewer must approve the job; (3) the npm Trusted Publisher's allowed
     # action is STAGE only, so this job cannot release: it stages the version
     # and a maintainer releases it on npmjs.com. Guards: the input tag must
@@ -77,7 +77,7 @@ jobs:
     needs: release
     if: github.event_name == 'workflow_dispatch' && inputs.npm_tag != ''
     runs-on: ubuntu-latest
-    environment: npm-publish
+    environment: npm-stage-publish
     permissions:
       contents: read
       id-token: write
