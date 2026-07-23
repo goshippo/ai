@@ -45,6 +45,19 @@ jobs:
             --title "@shippo/shippo-mcp $GITHUB_REF_NAME" \
             --notes "Local bridge to the hosted Shippo MCP server. To install in Claude Desktop, download shippo.dxt and open it." \
           || gh release upload "$GITHUB_REF_NAME" shippo.dxt --clobber
+      # Keep the docs' stable URL fresh: docs.goshippo.com's download button
+      # links releases/latest/download/shippo.dxt, and "latest" is pinned to
+      # the shippo-plugin release (see --latest=false above). Clobber this
+      # build's .dxt onto whatever release is currently "latest" so the docs
+      # always serve the newest bridge, with no manual refresh step.
+      - if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST=$(gh release view --json tagName --jq .tagName)
+          if [ -n "$LATEST" ] && [ "$LATEST" != "$GITHUB_REF_NAME" ]; then
+            gh release upload "$LATEST" shippo.dxt --clobber
+          fi
   npm-publish:
     # OIDC publish, human-gated: the npm-publish environment's required
     # reviewer must approve this job before it runs. Guards: the tag must
