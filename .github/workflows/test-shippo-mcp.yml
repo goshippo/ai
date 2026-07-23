@@ -1,0 +1,23 @@
+name: Test @shippo/shippo-mcp
+on:
+  pull_request:
+    paths:
+      - 'tools/modelcontextprotocol/**'
+      - '.github/workflows/test-shippo-mcp.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/modelcontextprotocol
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

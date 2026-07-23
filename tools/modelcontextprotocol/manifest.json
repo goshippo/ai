@@ -1,0 +1,32 @@
+{
+  "dxt_version": "0.1",
+  "name": "@shippo/shippo-mcp",
+  "display_name": "Shippo",
+  "version": "3.0.0",
+  "description": "Multi-carrier shipping for AI agents: compare rates, buy labels, track packages, and validate addresses. Local bridge to the hosted Shippo MCP server.",
+  "author": {
+    "name": "Shippo",
+    "email": "support@goshippo.com"
+  },
+  "documentation": "https://docs.goshippo.com/docs/Guides_general/MCPServer",
+  "server": {
+    "type": "node",
+    "entry_point": "dxt-dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dxt-dist/index.js"]
+    }
+  },
+  "tools": [
+    { "name": "shippo_list_tools" },
+    { "name": "shippo_describe_tool" },
+    { "name": "shippo_read_execute_tool" },
+    { "name": "shippo_write_execute_tool" }
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/goshippo/ai"
+  },
+  "icon": "shippo_icon.png"
+}
