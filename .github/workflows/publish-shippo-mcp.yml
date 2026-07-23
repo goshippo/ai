@@ -1,15 +1,23 @@
 name: Release @shippo/shippo-mcp (.dxt)
 on:
   workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "Existing shippo-mcp-v* tag to publish to npm (empty = verify only, no publish)"
+        required: false
+        default: ''
   push:
     tags: ['shippo-mcp-v*']
-# Tag push = release. The release job verifies the tagged code and attaches
-# the .dxt to the GitHub release (the README's "Add to Claude Desktop" button).
-# The npm-publish job then publishes to npm via OIDC trusted publishing
-# (npm Trusted Publisher: goshippo/ai + this filename + environment
-# npm-publish). That environment has a required reviewer, so every npm
-# publish still pauses for an explicit human approval, and no long-lived
-# npm token exists anywhere.
+# Tag push = release ONLY: verify the tagged code, attach the .dxt to the
+# GitHub release (the README's "Add to Claude Desktop" button), and refresh
+# the .dxt on the "latest" release for the docs download URL.
+# CI NEVER releases to npm. The npm-stage job runs only when a maintainer
+# manually dispatches this workflow with the npm_tag input set, then pauses
+# at the npm-publish environment for required-reviewer approval, and the
+# npm Trusted Publisher (goshippo/ai + this filename + environment
+# npm-publish) is restricted to the STAGE action: the upload lands as a
+# staged version that a maintainer must release on npmjs.com. Triple gate,
+# no long-lived npm token anywhere.
 # contents: write so the tagged run can create that release.
 permissions:
   contents: write
@@ -58,13 +66,16 @@ jobs:
           if [ -n "$LATEST" ] && [ "$LATEST" != "$GITHUB_REF_NAME" ]; then
             gh release upload "$LATEST" shippo.dxt --clobber
           fi
-  npm-publish:
-    # OIDC publish, human-gated: the npm-publish environment's required
-    # reviewer must approve this job before it runs. Guards: the tag must
-    # match package.json's version, and an already-published version is
-    # skipped cleanly (e.g. re-running a tag that was published manually).
+  npm-stage:
+    # Dispatch-only, triple-gated: (1) a maintainer must manually run this
+    # workflow with npm_tag set; (2) the npm-publish environment's required
+    # reviewer must approve the job; (3) the npm Trusted Publisher's allowed
+    # action is STAGE only, so this job cannot release: it stages the version
+    # and a maintainer releases it on npmjs.com. Guards: the input tag must
+    # match the checked-out package.json version, and an already-released
+    # version is skipped cleanly (e.g. one that was published manually).
     needs: release
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch' && inputs.npm_tag != ''
     runs-on: ubuntu-latest
     environment: npm-publish
     permissions:
@@ -75,15 +86,19 @@ jobs:
         working-directory: tools/modelcontextprotocol
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.npm_tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - id: guard
+        env:
+          NPM_TAG: ${{ inputs.npm_tag }}
         run: |
           PKG_VER=$(node -p "require('./package.json').version")
-          TAG_VER="${GITHUB_REF_NAME#shippo-mcp-v}"
+          TAG_VER="${NPM_TAG#shippo-mcp-v}"
           if [ "$PKG_VER" != "$TAG_VER" ]; then
             echo "package.json version ($PKG_VER) does not match tag ($TAG_VER)"; exit 1
           fi
@@ -91,5 +106,7 @@ jobs:
             echo "@shippo/shippo-mcp@$PKG_VER already on the registry; skipping publish"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
+      # With the Trusted Publisher restricted to STAGE, this uploads a staged
+      # version (not a live release); release happens manually on npmjs.com.
       - if: steps.guard.outputs.skip != 'true'
         run: npm publish --provenance
