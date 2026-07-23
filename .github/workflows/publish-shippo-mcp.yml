@@ -41,7 +41,7 @@ jobs:
       # --latest=false: the repo's "latest" release must stay the shippo-plugin
       # release (docs.goshippo.com deep-links releases/latest/download/ for the
       # plugin zip, knowledge pack, and shippo.dxt); a bridge release taking
-      # "latest" 404s those links (happened 2026-07-16, fixed 2026-07-22).
+      # "latest" 404s those links (happened 2026-07-17, fixed 2026-07-22).
       # Only on a tag push (a release needs a tag); skipped on workflow_dispatch.
       - if: startsWith(github.ref, 'refs/tags/')
         run: npm run build-dxt
