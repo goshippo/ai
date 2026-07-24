@@ -30,7 +30,7 @@ jobs:
       run:
         working-directory: tools/modelcontextprotocol
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -93,7 +93,7 @@ jobs:
       run:
         working-directory: tools/modelcontextprotocol
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.npm_tag }}
       # Node 24 bundles npm 11.16+: OIDC trusted publishing needs npm >= 11.5.1
