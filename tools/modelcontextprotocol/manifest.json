@@ -2,13 +2,13 @@
   "dxt_version": "0.1",
   "name": "@shippo/shippo-mcp",
   "display_name": "Shippo",
-  "version": "3.0.0",
+  "version": "3.0.4",
   "description": "Multi-carrier shipping for AI agents: compare rates, buy labels, track packages, and validate addresses. Local bridge to the hosted Shippo MCP server.",
   "author": {
     "name": "Shippo",
     "email": "support@goshippo.com"
   },
-  "documentation": "https://docs.goshippo.com/docs/Guides_general/MCPServer",
+  "documentation": "https://docs.goshippo.com/guides/mcp-server",
   "server": {
     "type": "node",
     "entry_point": "dxt-dist/index.js",

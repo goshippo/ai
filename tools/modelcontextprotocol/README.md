@@ -9,7 +9,7 @@ You must register for a [Shippo account](https://apps.goshippo.com/join) to use 
 You sign in through your browser (OAuth), so there is no API key to manage.
 
 <!-- API-KEY-AUTH (hidden until the hosted key door ships; the code path stays live, this is docs-only):
-For headless or automation use (CI, cron, service accounts) you can supply a Shippo [API token](https://docs.goshippo.com/docs/guides_general/authentication/) instead. A `shippo_test_` key runs in test mode and produces test labels; a `shippo_live_` key runs on your live account, where buying a label is billable.
+For headless or automation use (CI, cron, service accounts) you can supply a Shippo [API token](https://docs.goshippo.com/guides/authentication) instead. A `shippo_test_` key runs in test mode and produces test labels; a `shippo_live_` key runs on your live account, where buying a label is billable.
 -->
 
 ## Summary

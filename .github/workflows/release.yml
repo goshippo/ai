@@ -105,6 +105,26 @@ jobs:
             dist/app-plugin/shippo-plugin.zip
             dist/shippo-knowledge-pack.md
 
+      - name: Carry forward shippo.dxt from the current latest release
+        # This new plugin release becomes the repo's "latest" when published,
+        # and docs.goshippo.com deep-links releases/latest/download/shippo.dxt
+        # (the Claude Desktop button). Fetch the bridge .dxt from the CURRENT
+        # latest (still the previous plugin release at this point) so the new
+        # latest carries all three assets; skip cleanly on bootstrap (no dxt
+        # anywhere yet). gh release download fails on a missing asset, so a
+        # 404 HTML page can never be uploaded as shippo.dxt.
+        if: steps.gate.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          if gh release download --pattern shippo.dxt --output dist/shippo.dxt 2>/dev/null; then
+            unzip -l dist/shippo.dxt | grep -q 'manifest.json' || { echo "carried shippo.dxt is not a valid archive"; exit 1; }
+            echo "will carry shippo.dxt onto the new release"
+          else
+            echo "no shippo.dxt on the current latest release; skipping carry"
+          fi
+
       - name: Publish GitHub Release
         if: steps.gate.outputs.release == 'true'
         env:
@@ -118,4 +138,8 @@ jobs:
           fi
           # --clobber so re-runs replace the same-named asset idempotently.
           gh release upload "$TAG" dist/app-plugin/shippo-plugin.zip dist/shippo-knowledge-pack.md --clobber
+          if [ -f dist/shippo.dxt ]; then
+            gh release upload "$TAG" dist/shippo.dxt --clobber
+            echo "Carried shippo.dxt onto release $TAG."
+          fi
           echo "Published shippo-plugin.zip and shippo-knowledge-pack.md to release $TAG."

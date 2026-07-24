@@ -1,12 +1,25 @@
 name: Release @shippo/shippo-mcp (.dxt)
 on:
   workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "Existing shippo-mcp-v* tag to publish to npm (empty = verify only, no publish)"
+        required: false
+        default: ''
   push:
     tags: ['shippo-mcp-v*']
-# npm publishing is intentionally NOT automated: the maintainer runs
-# `npm publish` manually from a verified local checkout. This workflow only
-# verifies the tagged code and publishes the GitHub release with the .dxt,
-# which the README's "Add to Claude Desktop" button links to.
+# Tag push = release ONLY: verify the tagged code, attach the .dxt to the
+# GitHub release (the README's "Add to Claude Desktop" button), and refresh
+# the .dxt on the "latest" release for the docs download URL.
+# CI NEVER releases to npm. The npm-stage job runs only when a maintainer
+# manually dispatches this workflow with the npm_tag input set, then pauses
+# at the npm-stage-publish environment for required-reviewer approval, and the
+# npm Trusted Publisher (goshippo/ai + this filename + environment
+# npm-stage-publish) is restricted to the STAGE action: the upload lands as a
+# staged version that a maintainer must release on npmjs.com. Triple gate,
+# no long-lived npm token anywhere. Staging must be dispatched ON the tag ref
+# itself (guard-enforced), so the ref the release job verified, the packed
+# content, and the provenance attestation all describe the same commit.
 # contents: write so the tagged run can create that release.
 permissions:
   contents: write
@@ -27,14 +40,99 @@ jobs:
       - run: npm run build
       # Build the Desktop Extension and publish it as the tag's release asset, so
       # the README download button (releases/download/<tag>/shippo.dxt) resolves.
-      # Only on a tag push (a release needs a tag); skipped on workflow_dispatch.
-      - if: startsWith(github.ref, 'refs/tags/')
+      # --latest=false: the repo's "latest" release must stay the shippo-plugin
+      # release (docs.goshippo.com deep-links releases/latest/download/ for the
+      # plugin zip, knowledge pack, and shippo.dxt); a bridge release taking
+      # "latest" 404s those links (happened 2026-07-17, fixed 2026-07-22).
+      # Only on the tag-push EVENT: a workflow_dispatch never touches release
+      # assets, even when dispatched on a tag ref (npm staging requires that).
+      - if: github.event_name == 'push'
         run: npm run build-dxt
-      - if: startsWith(github.ref, 'refs/tags/')
+      # Refuse to distribute a broken extension: the packer must have included
+      # the bundled entry point (3.0.3's .dxtignore excluded dxt-dist/, so its
+      # shippo.dxt could not launch in Claude Desktop).
+      - if: github.event_name == 'push'
+        run: unzip -l shippo.dxt | grep -q 'dxt-dist/index.js'
+      - if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" shippo.dxt \
+          gh release create "$GITHUB_REF_NAME" shippo.dxt --latest=false \
             --title "@shippo/shippo-mcp $GITHUB_REF_NAME" \
             --notes "Local bridge to the hosted Shippo MCP server. To install in Claude Desktop, download shippo.dxt and open it." \
           || gh release upload "$GITHUB_REF_NAME" shippo.dxt --clobber
+      # Keep the docs' stable URL fresh: docs.goshippo.com's download button
+      # links releases/latest/download/shippo.dxt, and "latest" is pinned to
+      # the shippo-plugin release (see --latest=false above). Clobber this
+      # build's .dxt onto whatever release is currently "latest" so the docs
+      # always serve the newest bridge, with no manual refresh step.
+      - if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST=$(gh release view --json tagName --jq .tagName 2>/dev/null || true)
+          if [ -n "$LATEST" ] && [ "$LATEST" != "$GITHUB_REF_NAME" ]; then
+            gh release upload "$LATEST" shippo.dxt --clobber
+          fi
+  npm-stage:
+    # Dispatch-only, triple-gated: (1) a maintainer must manually run this
+    # workflow with npm_tag set; (2) the npm-stage-publish environment's required
+    # reviewer must approve the job; (3) the npm Trusted Publisher's allowed
+    # action is STAGE only, so this job cannot release: it stages the version
+    # and a maintainer releases it on npmjs.com. Guards: the input tag must
+    # match the checked-out package.json version, and an already-released
+    # version is skipped cleanly (e.g. one that was published manually).
+    needs: release
+    if: github.event_name == 'workflow_dispatch' && inputs.npm_tag != ''
+    runs-on: ubuntu-latest
+    environment: npm-stage-publish
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: tools/modelcontextprotocol
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.npm_tag }}
+      # Node 24 bundles npm 11.16+: OIDC trusted publishing needs npm >= 11.5.1
+      # and the npm stage command needs >= 11.15.0. Node 22 bundles npm 10.x,
+      # which supports neither (the job would fail auth with no token to fall
+      # back on). The release job stays on 22 to match .node-version.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - id: guard
+        env:
+          NPM_TAG: ${{ inputs.npm_tag }}
+        run: |
+          # The dispatch must be run ON the tag itself ("Use workflow from" ->
+          # the tag). Then the release job (needs) typechecked/tested/built this
+          # exact content, and the provenance attestation records the same ref
+          # that was packed. Release-asset steps stay untouched either way
+          # (they are gated on the push event).
+          if [ "$GITHUB_REF" != "refs/tags/$NPM_TAG" ]; then
+            echo "Dispatch this workflow ON the tag: pick '$NPM_TAG' in the 'Use workflow from' picker (run ref is '$GITHUB_REF')."
+            exit 1
+          fi
+          PKG_VER=$(node -p "require('./package.json').version")
+          TAG_VER="${NPM_TAG#shippo-mcp-v}"
+          if [ "$PKG_VER" != "$TAG_VER" ]; then
+            echo "package.json version ($PKG_VER) does not match tag ($TAG_VER)"; exit 1
+          fi
+          if npm view "@shippo/shippo-mcp@$PKG_VER" version >/dev/null 2>&1; then
+            echo "@shippo/shippo-mcp@$PKG_VER already on the registry; skipping publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      # npm stage publish uploads a STAGED version (provenance is generated
+      # automatically under trusted publishing). It cannot release: the Trusted
+      # Publisher's only allowed action is stage; a maintainer releases via
+      # npm stage approve (or the Staged Packages tab on npmjs.com) with 2FA.
+      # NOTE: a pending staged version is invisible to npm view, so the guard
+      # above cannot skip it; re-dispatching while a stage awaits approval
+      # fails loudly here. Approve or reject the pending stage first.
+      - if: steps.guard.outputs.skip != 'true'
+        run: npm stage publish
