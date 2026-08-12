@@ -1,0 +1,39 @@
+# Copy this file to .github/workflows/ai-pr-review.yml in your repo.
+# Prerequisites and setup: see README.md > "How to adopt".
+
+name: AI PR Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
+  pull_request:
+    # `closed` drives the analytics finalizer (no review runs on close).
+    types: [opened, synchronize, reopened, ready_for_review, closed]
+    # Skip the reviewer on PRs that only touch this file (avoids a spurious
+    # anti-tamper failure). Match the path to your saved filename.
+    paths-ignore:
+      - '.github/workflows/ai-pr-review.yml'
+
+permissions:
+  contents: write
+  pull-requests: write  # post inline comments + edit PR body
+  actions: read
+  checks: read
+  id-token: write       # OIDC token exchange so the workflow can assume the Bedrock IAM role
+
+jobs:
+  review:
+    uses: goshippo/shippo-ai-workflows/.github/workflows/ai-pr-review.yml@stable
+    with:
+      pr_number: ${{ inputs.pr_number || '' }}
+      # Optional tunables (all have safe defaults — uncomment only if needed):
+      # model: claude-opus-4-8             # bare model name; workflow prepends us.anthropic.
+      # enable_ci_gate: false              # set true (default) to wait for other CI to pass first
+      # ci_gate_timeout_minutes: 30        # how long the gate waits for CI to settle
+      # timeout_minutes: 15                # how long the review job itself runs
+      # ci_gate_additional_excluded_workflows: '["Require Global On-Call Review"]'
+      # output_verbosity: terse            # terse | normal | verbose
