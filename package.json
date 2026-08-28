@@ -27,6 +27,7 @@
     "check-app-plugin-version-drift": "bash scripts/check-app-plugin-version-drift.sh",
     "validate-frontmatter": "node scripts/validate-frontmatter.js",
     "check-tool-references": "node scripts/check-tool-references.js",
-    "test": "npm run check-no-generated-edits && npm run sync && npm run validate-frontmatter && npm run check-drift && npm run check-tool-references"
+    "test:examples": "node --test examples/acp-fulfillment/shippo-to-acp.test.js",
+    "test": "npm run check-no-generated-edits && npm run sync && npm run validate-frontmatter && npm run check-drift && npm run check-tool-references && npm run test:examples"
   }
 }
