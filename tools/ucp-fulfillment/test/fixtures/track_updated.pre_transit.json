@@ -1,0 +1,19 @@
+{
+  "event": "track_updated",
+  "test": true,
+  "data": {
+    "carrier": "deutsche_post",
+    "messages": [],
+    "tracking_history": [],
+    "tracking_number": "LX000000000DE",
+    "tracking_status": {
+      "object_created": "2026-09-03T16:00:00Z",
+      "object_id": "ts_pre_1",
+      "object_updated": "2026-09-03T16:00:00Z",
+      "status": "PRE_TRANSIT",
+      "substatus": { "code": "information_received", "text": "Information about the package received.", "action_required": false },
+      "status_date": "2026-09-03T15:00:00Z",
+      "status_details": "Shipment information received"
+    }
+  }
+}

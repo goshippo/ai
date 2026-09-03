@@ -1,0 +1,44 @@
+{
+  "event": "track_updated",
+  "test": true,
+  "data": {
+    "address_from": { "city": "Las Vegas", "country": "US", "state": "NV", "zip": "89101" },
+    "address_to": { "city": "Las Vegas", "country": "US", "state": "NV", "zip": "89101" },
+    "carrier": "usps",
+    "eta": "2019-08-24T14:15:22Z",
+    "messages": ["string"],
+    "metadata": "Order 000123",
+    "original_eta": "2021-07-23T00:00:00Z",
+    "servicelevel": {
+      "name": "Priority Mail Express",
+      "terms": "string",
+      "token": "usps_priority_express",
+      "extended_token": "string",
+      "parent_servicelevel": { "name": "Priority Mail Express", "terms": "string", "token": "usps_priority_express", "extended_token": "string" }
+    },
+    "tracking_history": [
+      {
+        "location": { "city": "Las Vegas", "country": "US", "state": "NV", "zip": "89101" },
+        "object_created": "2019-08-24T14:15:22Z",
+        "object_id": "string",
+        "object_updated": "2019-08-24T14:15:22Z",
+        "status": "DELIVERED",
+        "substatus": { "code": "information_received", "text": "Information about the package received.", "action_required": false },
+        "status_date": "2016-07-23T00:00:00Z",
+        "status_details": "Your shipment has been delivered at the destination mailbox."
+      }
+    ],
+    "tracking_number": "9205590164917312751089",
+    "tracking_status": {
+      "location": { "city": "Las Vegas", "country": "US", "state": "NV", "zip": "89101" },
+      "object_created": "2019-08-24T14:15:22Z",
+      "object_id": "string",
+      "object_updated": "2019-08-24T14:15:22Z",
+      "status": "DELIVERED",
+      "substatus": { "code": "information_received", "text": "Information about the package received.", "action_required": false },
+      "status_date": "2016-07-23T00:00:00Z",
+      "status_details": "Your shipment has been delivered at the destination mailbox."
+    },
+    "transaction": "string"
+  }
+}

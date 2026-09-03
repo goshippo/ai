@@ -1,0 +1,73 @@
+{
+    "messages": [],
+    "carrier": "shippo",
+    "tracking_number": "SHIPPO_TRANSIT",
+    "address_from": {
+        "city": "San Francisco",
+        "state": "CA",
+        "zip": "94103",
+        "country": "US"
+    },
+    "address_to": {
+        "city": "Chicago",
+        "state": "IL",
+        "zip": "60611",
+        "country": "US"
+    },
+    "eta": "2018-08-02T18:49:42.566",
+    "original_eta": "2018-08-02T18:49:42.566",
+    "servicelevel": {
+        "token": "shippo_priority",
+        "name": "Priority Mail"
+    },
+    "metadata": "Shippo test tracking",
+    "tracking_status": {
+        "object_created": "2018-07-30T18:49:42.586",
+        "object_updated": null,
+        "object_id": "560f1b9cfe8341a2899e0388f1b9081c",
+        "status": "TRANSIT",
+        "status_details": "Your shipment has departed from the origin.",
+        "status_date": "2018-07-29T16:44:42.586",
+        "substatus": null,
+        "location": {
+            "city": "San Francisco",
+            "state": "CA",
+            "zip": "94103",
+            "country": "US"
+        }
+    },
+    "tracking_history": [
+        {
+            "object_created": "2018-07-30T18:49:42.589",
+            "object_updated": null,
+            "object_id": "9a056563ad874a0b9bf79dee321f25f5",
+            "status": "UNKNOWN",
+            "status_details": "The carrier has received the electronic shipment information.",
+            "status_date": "2018-07-28T14:39:42.589",
+            "substatus": null,
+            "location": {
+                "city": "San Francisco",
+                "state": "CA",
+                "zip": "94103",
+                "country": "US"
+            }
+        },
+        {
+            "object_created": "2018-07-30T18:49:42.589",
+            "object_updated": null,
+            "object_id": "82ef073b04ef48368e79b835af788fce",
+            "status": "TRANSIT",
+            "status_details": "Your shipment has departed from the origin.",
+            "status_date": "2018-07-29T16:44:42.589",
+            "substatus": null,
+            "location": {
+                "city": "San Francisco",
+                "state": "CA",
+                "zip": "94103",
+                "country": "US"
+            }
+        }
+    ],
+    "transaction": null,
+    "test": true
+}
