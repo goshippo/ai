@@ -1,0 +1,23 @@
+{
+  "object_created": "2026-09-03T15:00:00.000Z",
+  "object_id": "rate_dhl_crossborder",
+  "object_owner": "merchant@example.com",
+  "shipment": "shp_3",
+  "attributes": [],
+  "amount": "42.00",
+  "currency": "USD",
+  "amount_local": "38.60",
+  "currency_local": "EUR",
+  "provider": "DHL Express",
+  "servicelevel": {
+    "name": "Express Worldwide",
+    "token": "dhl_express_worldwide",
+    "extended_token": "dhl_express_worldwide_ddp",
+    "terms": ""
+  },
+  "estimated_days": 4,
+  "duration_terms": "Delivery in 3 to 5 business days.",
+  "messages": [],
+  "carrier_account": "ca_dhl_us",
+  "test": true
+}
