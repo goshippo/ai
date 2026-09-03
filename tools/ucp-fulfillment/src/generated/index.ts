@@ -5,6 +5,8 @@ export type {
   FulfillmentGroup,
   FulfillmentMethod,
   Expectation,
+  Message,
+  MessageError,
   Order,
   PostalAddress,
   Total,
