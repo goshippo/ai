@@ -68,6 +68,12 @@ export interface ShippoTrackInput {
   trackingStatus?: ShippoTrackingStatusInput | null | undefined;
   /** Full history, oldest first, as Shippo returns it. */
   trackingHistory?: ShippoTrackingStatusInput[] | undefined;
+  /**
+   * Indexes into the ORIGINAL tracking_history array (as Shippo sent it, before any entries were
+   * dropped) that normalizeTrack could not read, most commonly a history entry with no status.
+   * Present only when non-empty, so an ordinary payload leaves this field entirely absent.
+   */
+  droppedHistoryIndexes?: number[] | undefined;
 }
 
 /** The subset of a Shippo Transaction the post-purchase event reads. */
@@ -168,7 +174,13 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function normalizeStatus(raw: unknown): ShippoTrackingStatusInput | undefined {
+/**
+ * `requireStatus` is true for the live tracking_status (the default) and false for a
+ * tracking_history entry: the live status is load-bearing for the whole payload, so its absence
+ * throws, while a history entry is one of potentially many and is dropped by the caller instead
+ * (see normalizeTrack) rather than failing an otherwise-good payload over one bad scan.
+ */
+function normalizeStatus(raw: unknown, requireStatus = true): ShippoTrackingStatusInput | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const source = raw as Record<string, unknown>;
   // status is required on Shippo's TrackingStatus, in the OpenAPI contract and in the SDK type. If
@@ -176,7 +188,10 @@ function normalizeStatus(raw: unknown): ShippoTrackingStatusInput | undefined {
   // post a fabricated "processing" event onto a real order while putting the guess one layer below
   // mapTrackingStatus, where UnmappedTrackingStatusError can no longer see it.
   const status = text(source['status']);
-  if (!status) throw new MalformedTrackError('tracking_status.status');
+  if (!status) {
+    if (requireStatus) throw new MalformedTrackError('tracking_status.status');
+    return undefined;
+  }
   const result: ShippoTrackingStatusInput = { status };
   const objectId = text(source['object_id']) ?? text(source['objectId']);
   const statusDate = text(source['status_date']) ?? text(source['statusDate']);
@@ -209,9 +224,14 @@ function normalizeStatus(raw: unknown): ShippoTrackingStatusInput | undefined {
  * for optional fields, sends naive timestamps in test mode, and can add a status value without an
  * API version bump; the SDK schema treats all three as hard failures, which would turn Shippo's
  * own documented test flow into a permanently retrying 500. The hard requirements are carrier,
- * tracking_number and, when a tracking_status is present, its status: nothing downstream can
- * proceed without the first two, and a status is required on Shippo's own TrackingStatus, so
+ * tracking_number and, when the LIVE tracking_status is present, its status: nothing downstream
+ * can proceed without the first two, and a status is required on Shippo's own TrackingStatus, so
  * inventing one would post a fabricated event rather than report an unreadable payload.
+ *
+ * tracking_history is held to a looser standard. A history entry this function cannot read (most
+ * commonly one with no status) is DROPPED rather than failing the whole payload: one bad scan
+ * buried in a long history should not make an otherwise-good live tracking_status unreadable. Its
+ * original index, into the array as Shippo sent it, is recorded in droppedHistoryIndexes.
  */
 export function normalizeTrack(raw: unknown): ShippoTrackInput {
   if (!raw || typeof raw !== 'object') throw new MalformedTrackError('track body');
@@ -230,10 +250,15 @@ export function normalizeTrack(raw: unknown): ShippoTrackInput {
   if (status) result.trackingStatus = status;
   const rawHistory = source['tracking_history'] ?? source['trackingHistory'];
   if (Array.isArray(rawHistory)) {
-    const history = rawHistory
-      .map((entry) => normalizeStatus(entry))
-      .filter((entry): entry is ShippoTrackingStatusInput => entry !== undefined);
+    const history: ShippoTrackingStatusInput[] = [];
+    const droppedHistoryIndexes: number[] = [];
+    rawHistory.forEach((entry, index) => {
+      const normalized = normalizeStatus(entry, false);
+      if (normalized) history.push(normalized);
+      else droppedHistoryIndexes.push(index);
+    });
     if (history.length) result.trackingHistory = history;
+    if (droppedHistoryIndexes.length) result.droppedHistoryIndexes = droppedHistoryIndexes;
   }
   return result;
 }
@@ -273,11 +298,25 @@ export function mapTrackingStatus(
   }
 }
 
-/** Design decision 3, in precedence order. A blank candidate falls through to the next one. */
+/**
+ * Design decision 3, in precedence order. A blank candidate falls through to the next one.
+ *
+ * The three candidates built FROM the tracking number (merchant template, Shippo tracking page,
+ * built-in table) are computed from a single trimmed value, and contribute nothing at all when
+ * that value is blank: shippoTrackingPageUrl in particular has no blank guard of its own, and
+ * would otherwise return a truthy but untrackable URL such as ".../usr_42/ups/" (trailing slash,
+ * no number), which would outrank the built-in table and silently swallow the tracking_url-omitted
+ * warning in buildFulfillmentEventResult. An explicit trackingUrl or a transaction's
+ * tracking_url_provider is untouched by this: neither is derived from the tracking number, so both
+ * remain legitimate answers even when Shippo has no usable number for us (pinned by the "a missing
+ * tracking number past processing is warned about too" test, which expects an explicit trackingUrl
+ * to still resolve against a blank tracking number).
+ */
 export function resolveTrackingUrl(
   track: Pick<ShippoTrackInput, 'carrier' | 'trackingNumber'>,
   opts: ResolveTrackingUrlOptions,
 ): string | undefined {
+  const trackingNumber = track.trackingNumber.trim();
   // templateTrackingUrl, not carrierTrackingUrl: only a pattern the merchant actually supplied for
   // THIS carrier ranks here. carrierTrackingUrl falls through to the built-in table when no
   // template matches, which would return a built-in URL at this position and leave the merchant's
@@ -285,11 +324,11 @@ export function resolveTrackingUrl(
   const candidates = [
     opts.trackingUrl,
     opts.transaction?.trackingUrlProvider,
-    templateTrackingUrl(track.carrier, track.trackingNumber, opts.trackingUrlTemplates),
-    opts.shippoTrackingUserId
-      ? shippoTrackingPageUrl(opts.shippoTrackingUserId, track.carrier, track.trackingNumber)
+    trackingNumber ? templateTrackingUrl(track.carrier, trackingNumber, opts.trackingUrlTemplates) : undefined,
+    trackingNumber && opts.shippoTrackingUserId
+      ? shippoTrackingPageUrl(opts.shippoTrackingUserId, track.carrier, trackingNumber)
       : undefined,
-    carrierTrackingUrl(track.carrier, track.trackingNumber),
+    trackingNumber ? carrierTrackingUrl(track.carrier, trackingNumber) : undefined,
   ];
   return candidates.map((candidate) => candidate?.trim()).find((candidate): candidate is string => Boolean(candidate));
 }
@@ -413,8 +452,12 @@ export function buildFulfillmentEvent(track: ShippoTrackInput, opts: BuildEventO
  * Use this to backfill an order that was already in flight when the integration went live.
  */
 export function buildFulfillmentEvents(track: ShippoTrackInput, opts: BuildEventOptions): FulfillmentEvent[] {
+  // id and type are per-status, not per-track: forwarding a caller's explicit override to every
+  // entry would collapse the whole history onto one id (or one type), so each event is built from
+  // its own derived id and its own mapped type instead.
+  const { id: _ignoredId, type: _ignoredType, ...perEntryOpts } = opts;
   return (track.trackingHistory ?? []).map((status) =>
-    buildFulfillmentEvent({ ...track, trackingStatus: status }, opts),
+    buildFulfillmentEvent({ ...track, trackingStatus: status }, perEntryOpts),
   );
 }
 

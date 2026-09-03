@@ -108,6 +108,25 @@ test('normalizeTrack carries action_required through and refuses what it cannot 
   );
 });
 
+test('a history entry with no status is dropped, not fatal, and its index is recorded', () => {
+  const raw = payload('track_updated.accepted.json');
+  // Index 0 is the fixture's own (valid) live tracking_status reused as history; index 1 has no
+  // status at all. Only index 1 should be dropped: one bad scan buried in a long history must not
+  // make an otherwise-good live tracking_status unreadable.
+  const withBadHistory = {
+    ...raw.data,
+    tracking_history: [
+      raw.data.tracking_status,
+      { object_id: 'h2', object_created: '2026-09-03T16:00:00Z', object_updated: '2026-09-03T16:00:00Z', status_details: 'no status here' },
+    ],
+  };
+  const t = normalizeTrack(withBadHistory);
+  assert.equal(t.trackingHistory?.length, 1);
+  assert.deepEqual(t.droppedHistoryIndexes, [1]);
+  // The live tracking_status is unaffected by the malformed history entry.
+  assert.equal(t.trackingStatus?.status, 'TRANSIT');
+});
+
 test('status map: the six documented statuses, and nothing else (design decision 2)', () => {
   assert.equal(mapTrackingStatus('UNKNOWN'), 'processing');
   assert.equal(mapTrackingStatus('UNKNOWN', 'other'), 'processing');
@@ -316,6 +335,32 @@ test('a missing tracking number past processing is warned about too', () => {
   );
 });
 
+test('a blank tracking number defeats the Shippo tracking page too, not just the built-in table', () => {
+  const base = track('track_updated.accepted.json');
+  const blankNumber = '   ';
+  const blank: ShippoTrackInput = { ...base, trackingNumber: blankNumber };
+  // shippoTrackingPageUrl builds a URL from the tracking number with no guard of its own; without a
+  // blank check in resolveTrackingUrl it would return a truthy but untrackable
+  // ".../usr_42/ups/" (trailing slash, no number), which would silently swallow the warning below.
+  const { event, warnings } = buildFulfillmentEventResult(blank, {
+    lineItems: LINE_ITEMS,
+    shippoTrackingUserId: 'usr_42',
+  });
+  assert.equal(event.tracking_url, undefined);
+  assert.equal(event.tracking_number, undefined);
+  assert.equal(event.type, 'shipped');
+  assert.deepEqual(warnings, [
+    `tracking_url omitted for ups ${blankNumber} on a shipped event: no explicit url, no transaction tracking_url_provider, no merchant template, no shippoTrackingUserId and no built-in url for this carrier`,
+    'tracking_number missing for ups on a shipped event',
+  ]);
+  // An explicit trackingUrl is not derived from the tracking number, so it still resolves even when
+  // the number is blank (matching the precedent set by the test above, which pins the same thing).
+  assert.equal(
+    resolveTrackingUrl(blank, { trackingUrl: 'https://explicit.example/t', shippoTrackingUserId: 'usr_42' }),
+    'https://explicit.example/t',
+  );
+});
+
 test('an occurred_at derived from Shippo ingestion time is reported, not hidden', () => {
   const base = track('track_updated.accepted.json');
   const noStatusDate: ShippoTrackInput = { ...base, trackingStatus: { ...base.trackingStatus!, statusDate: null } };
@@ -436,6 +481,16 @@ test('golden: buildFulfillmentEvents backfills a shipment already in flight', ()
   ]);
   for (const event of events) checkEvent(event);
   assert.deepEqual(buildFulfillmentEvents({ carrier: 'ups', trackingNumber: '1Z' }, { lineItems: LINE_ITEMS }), []);
+  // id is per-status, not per-track: forwarding an explicit override to every history entry would
+  // collapse two distinct scans onto one id, which appendFulfillmentEvent would treat as a duplicate.
+  const fixedIdEvents = buildFulfillmentEvents(normalizeTrack(payload('track.test_mode.json')), {
+    lineItems: LINE_ITEMS,
+    shippoTrackingUserId: 'usr_42',
+    id: 'evt_fixed',
+  });
+  assert.equal(fixedIdEvents.length, 2);
+  assert.notEqual(fixedIdEvents[0].id, fixedIdEvents[1].id);
+  assert.notEqual(fixedIdEvents[0].id, 'evt_fixed');
 });
 
 test('golden: an expectation is the buyer-facing promise beside the event log', () => {
