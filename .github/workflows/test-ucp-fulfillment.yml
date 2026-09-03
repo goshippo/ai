@@ -1,0 +1,23 @@
+name: Test @shippo/ucp-fulfillment
+on:
+  pull_request:
+    paths:
+      - 'tools/ucp-fulfillment/**'
+      - '.github/workflows/test-ucp-fulfillment.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/ucp-fulfillment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

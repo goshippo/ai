@@ -1,0 +1,49 @@
+{
+  "name": "@shippo/ucp-fulfillment",
+  "version": "0.1.0",
+  "description": "Map Shippo rates and tracking onto the Universal Commerce Protocol (UCP) fulfillment extension and order capability. Library merchants embed to power UCP fulfillment options and order fulfillment events with Shippo.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/goshippo/ai.git",
+    "directory": "tools/ucp-fulfillment"
+  },
+  "homepage": "https://github.com/goshippo/ai/tree/main/tools/ucp-fulfillment",
+  "bugs": "https://github.com/goshippo/ai/issues",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "gen:types": "node --import tsx scripts/gen-types.ts",
+    "example": "node --import tsx examples/fixtures-demo.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "shippo": "^2.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ajv": "^8.17.0",
+    "ajv-formats": "^3.0.1",
+    "json-schema-to-typescript": "^16.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}
