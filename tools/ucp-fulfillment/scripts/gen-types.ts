@@ -20,7 +20,13 @@ const banner = [
 const ts = await compileFromFile(entry, {
   cwd: schemasDir,
   bannerComment: banner,
-  additionalProperties: true,
+  // false means "do not invent an index signature where the schema is silent". The 18 index
+  // signatures the UCP schemas explicitly ask for (fulfillment_option, fulfillment_option_base,
+  // fulfillment_group and friends) are still emitted, because those schemas really do declare
+  // additionalProperties: true. Keeping the rest closed restores excess-property checking on
+  // FulfillmentEvent, FulfillmentMethod, Expectation, Order and Total, which this library
+  // constructs by hand and would otherwise be able to misspell without a compile error.
+  additionalProperties: false,
   strictIndexSignatures: false,
   unknownAny: true,
 });

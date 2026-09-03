@@ -39,7 +39,6 @@ export type Total = {
    */
   display_text?: string;
   amount: SignedAmount;
-  [k: string]: unknown;
 };
 /**
  * Monetary amount in the currency's minor unit as defined by ISO 4217. Refer to the currency's exponent to determine minor-to-major ratio (e.g., 2 for USD, 0 for JPY, 3 for KWD). May be negative — the sign is intrinsic to the value (e.g., discounts are negative, charges are positive).
@@ -73,7 +72,6 @@ export type FulfillmentMethod = {
    * Fulfillment groups for selecting options. Agent sets selected_option_id on groups to choose shipping method.
    */
   groups?: FulfillmentGroup[];
-  [k: string]: unknown;
 };
 /**
  * A destination for fulfillment.
@@ -87,7 +85,6 @@ export type FulfillmentDestination = {
    * Fulfillment destination identifier.
    */
   id: string;
-  [k: string]: unknown;
 };
 /**
  * UCP metadata for order responses. No payment handlers needed post-purchase.
@@ -96,7 +93,6 @@ export type UCPOrderResponseSchema = Base & {
   capabilities?: {
     [k: string]: CapabilityResponseSchema[];
   };
-  [k: string]: unknown;
 };
 /**
  * Reverse-domain identifier used for collision-safe namespacing of capabilities, services, handlers, eligibility claims, and extension-contributed keys. Must contain at least two dot-separated segments (e.g., 'dev.ucp.shopping.checkout', 'com.example.loyalty_gold'). Segments after the first are domain- or identifier-derived: they may contain interior hyphens, may start with a digit, and may contain underscores (e.g., 'com.example-shop.checkout', 'com.2example.cart', 'dev.ucp.common.identity_linking'), but must not start or end with a hyphen. The first segment (the reversed top-level domain) is letters and digits, and may contain interior hyphens to support internationalized (punycode) top-level domains such as 'xn--p1ai'.
@@ -129,7 +125,6 @@ export type CapabilityResponseSchema = Entity & {
    * Parent capability(s) this extends. Present for extensions, absent for root capabilities. Use array for multi-parent extensions.
    */
   extends?: ReverseDomainName | [ReverseDomainName, ...ReverseDomainName[]];
-  [k: string]: unknown;
 };
 /**
  * Unit price in ISO 4217 minor units. Price is the amount per one whole `quantity_unit.unit` (for example, per lb or per hour); when `quantity_unit` is absent, it is per `each`.
@@ -143,7 +138,6 @@ export type QuantityUnit = Unit & {
    * Ordering granularity, denominated in steps: the Business sells this item in integer multiples of `increment` steps. Its effective value is the provided value or 1. Advisory merchandising policy, not a representational bound: Platform-authored quantities SHOULD be integer multiples of the effective increment; the Business MAY accept, revise, or reject an off-increment request with a recoverable business outcome and MUST NOT silently reinterpret it. Business-authored quantities (checkout revisions, fulfillment events, adjustments) are bounded only by `scale`.
    */
   increment?: number;
-  [k: string]: unknown;
 };
 /**
  * A reusable unit descriptor for quantities and measures. Its unit-descriptor machine identity is (`unit`, effective `scale`), where effective `scale` is the provided `scale` or 0; `display_text` is excluded.
@@ -161,7 +155,6 @@ export type Unit = {
    * Required printable unit label provided by the Business. The Platform MUST use it when it does not recognize `unit`; for a recognized UN/CEFACT Rec 20 Common Code, the Platform MAY substitute its own localized label. It does not participate in unit identity or mismatch comparison.
    */
   display_text: string;
-  [k: string]: unknown;
 };
 /**
  * Unit price in ISO 4217 minor units. After satisfying the same-unit invariant, the Business MUST compute the comparator as `(price.amount / (measure.value × 10^-measure.scale)) × (reference.value × 10^-reference.scale)` and round it once to ISO 4217 minor units according to its pricing rules. The returned `unit_price.amount` is authoritative; the Platform MUST NOT recompute or substitute its own result.
@@ -175,7 +168,6 @@ export type Measure = Unit & {
    * Integer count of `10^-scale` units of `unit`.
    */
   value: number;
-  [k: string]: unknown;
 };
 /**
  * A measure composed of an integer value and a unit descriptor. Its value is the integer count of `10^-scale` units of `unit`.
@@ -185,7 +177,6 @@ export type Measure1 = Unit & {
    * Integer count of `10^-scale` units of `unit`.
    */
   value: number;
-  [k: string]: unknown;
 };
 /**
  * Different totals for the order.
@@ -202,9 +193,7 @@ export type Totals = (Total & {
      */
     display_text: string;
     amount: SignedAmount1;
-    [k: string]: unknown;
   }[];
-  [k: string]: unknown;
 })[];
 /**
  * Monetary amount in the currency's minor unit as defined by ISO 4217. Refer to the currency's exponent to determine minor-to-major ratio (e.g., 2 for USD, 0 for JPY, 3 for KWD). May be negative — the sign is intrinsic to the value (e.g., discounts are negative, charges are positive).
@@ -241,7 +230,6 @@ export interface UCPEntry {
   fulfillment_method?: FulfillmentMethod;
   expectation?: Expectation;
   order?: Order;
-  [k: string]: unknown;
 }
 /**
  * Common base for a fulfillment option: an addressable, renderable choice (e.g. Standard, Express). Catalog uses this base directly; checkout composes it with cost and timing.
@@ -274,7 +262,6 @@ export interface Description {
    * Markdown-formatted content.
    */
   markdown?: string;
-  [k: string]: unknown;
 }
 /**
  * Append-only fulfillment event representing an actual shipment. References line items by ID.
@@ -304,7 +291,6 @@ export interface FulfillmentEvent {
      * Integer count of steps of the referenced line item's `quantity_unit` (`10^-scale` × `unit`); when `quantity_unit` is absent, it counts whole items (`each`).
      */
     quantity: number;
-    [k: string]: unknown;
   }[];
   /**
    * Carrier tracking number (required if type != processing).
@@ -322,7 +308,6 @@ export interface FulfillmentEvent {
    * Human-readable description of the shipment status or delivery information (e.g., 'Delivered to front door', 'Out for delivery').
    */
   description?: string;
-  [k: string]: unknown;
 }
 /**
  * A merchant-generated package/group of line items with fulfillment options.
@@ -366,7 +351,6 @@ export interface Expectation {
      * Integer count of steps of the referenced line item's `quantity_unit` (`10^-scale` × `unit`); when `quantity_unit` is absent, it counts whole items (`each`).
      */
     quantity: number;
-    [k: string]: unknown;
   }[];
   /**
    * Delivery method type. Well-known values: `shipping`, `pickup`, `digital`; additional values MAY be used.
@@ -381,7 +365,6 @@ export interface Expectation {
    * When this expectation can be fulfilled: 'now' or ISO 8601 timestamp for future date (backorder, pre-order).
    */
   fulfillable_on?: string;
-  [k: string]: unknown;
 }
 /**
  * Delivery destination address.
@@ -423,7 +406,6 @@ export interface PostalAddress {
    * Optional. Phone number of the contact associated with the address.
    */
   phone_number?: string;
-  [k: string]: unknown;
 }
 /**
  * Order schema with line items, buyer-facing fulfillment expectations, and event logs.
@@ -462,7 +444,6 @@ export interface Order {
      * Append-only event log of actual shipments. Each event references line items by ID.
      */
     events?: FulfillmentEvent[];
-    [k: string]: unknown;
   };
   /**
    * Post-order events (refunds, returns, credits, disputes, cancellations, etc.) that exist independently of fulfillment.
@@ -482,7 +463,6 @@ export interface Order {
    */
   messages?: Message[];
   attribution?: Attribution;
-  [k: string]: unknown;
 }
 /**
  * Base UCP metadata with shared properties for all schema types.
@@ -510,7 +490,6 @@ export interface Base {
        * Endpoint URL for this transport binding.
        */
       endpoint?: string;
-      [k: string]: unknown;
     })[];
   };
   /**
@@ -522,26 +501,21 @@ export interface Base {
        * Parent capability(s) this extends. Present for extensions, absent for root capabilities. Use array for multi-parent extensions.
        */
       extends?: ReverseDomainName | [ReverseDomainName, ...ReverseDomainName[]];
-      [k: string]: unknown;
     })[];
   };
   /**
    * Payment handler registry keyed by reverse-domain name.
    */
   payment_handlers?: {
-    [k: string]: (Entity & {
-      [k: string]: unknown;
-    } & {
+    [k: string]: (Entity & {} & {
       /**
        * Instrument types this handler supports, with optional constraints. When absent, every instrument should be considered available.
        *
        * @minItems 1
        */
       available_instruments?: [AvailablePaymentInstrument, ...AvailablePaymentInstrument[]];
-      [k: string]: unknown;
     })[];
   };
-  [k: string]: unknown;
 }
 /**
  * Preferred key-traversal order for sibling registry fields inside the root `ucp` envelope (`services`, `capabilities`, and `payment_handlers`).
@@ -575,7 +549,6 @@ export interface Entity {
   config?: {
     [k: string]: unknown;
   };
-  [k: string]: unknown;
 }
 /**
  * An instrument type available from a payment handler with optional constraints.
@@ -586,7 +559,6 @@ export interface AvailablePaymentInstrument {
    */
   type: string;
   constraints?: ConstraintExpression;
-  [k: string]: unknown;
 }
 /**
  * A Constraint Expression describing the instrument this entry makes available. Keys in `properties` name members of the `constraint_target` declared by the instrument schema for this `type`. Requirements on submitted request data belong in `ucp.request_constraints` instead.
@@ -679,7 +651,6 @@ export interface OrderLineItem {
      * Quantity fulfilled so far, expressed as an integer step count.
      */
     fulfilled: number;
-    [k: string]: unknown;
   };
   /**
    * Line item totals breakdown.
@@ -693,7 +664,6 @@ export interface OrderLineItem {
    * Parent line item identifier for any nested structures.
    */
   parent_id?: string;
-  [k: string]: unknown;
 }
 /**
  * Purchased item data, including identity, price, and sale basis.
@@ -714,7 +684,6 @@ export interface Item {
    * Product image URI.
    */
   image_url?: string;
-  [k: string]: unknown;
 }
 /**
  * Pricing basis for this item. On an authoritative Business response, the Business MUST include `unit_price` on every line whose pricing basis differs from its sale basis (for example, priced per pound but sold per `each`); presence on a line marks the rate as transactional rather than display-only. When the pricing basis is the sale basis, `item.price` fully denominates the charge and this field MAY be omitted.
@@ -732,7 +701,6 @@ export interface UnitPrice {
     value?: {
       [k: string]: unknown;
     };
-    [k: string]: unknown;
   };
   /**
    * Denominator for unit price display (for example, per 100 mL or per 1 kg). Its integer `value` MUST be at least 1.
@@ -741,9 +709,7 @@ export interface UnitPrice {
     value?: {
       [k: string]: unknown;
     };
-    [k: string]: unknown;
   };
-  [k: string]: unknown;
 }
 /**
  * Post-order event that exists independently of fulfillment. Typically represents money movements but can be any post-order change. Polymorphic type that can optionally reference line items.
@@ -778,7 +744,6 @@ export interface Adjustment {
      */
     quantity: number;
     measure?: Measure1;
-    [k: string]: unknown;
   }[];
   /**
    * Adjustment totals breakdown. Signed values - negative for money returned to buyer (refunds, credits), positive for additional charges (exchanges).
@@ -788,7 +753,6 @@ export interface Adjustment {
    * Human-readable reason or description (e.g., 'Defective item', 'Customer requested').
    */
   description?: string;
-  [k: string]: unknown;
 }
 /**
  * A durable business rule about the items in a response — return/refund terms, warranty, and the like — at the time of purchase. Every policy carries a `type` (an open reverse-DNS vocabulary) and a `description` so a platform can present it without understanding its type-specific fields; type-specific fields (gated by `type`) add structured context for platforms that model that type. Policies are reference data; the obligation to display a term to the buyer is carried by a `messages[]` warning whose `code` equals the policy `type` — see the Policies section of the specification.
@@ -822,7 +786,6 @@ export interface Description1 {
    * Markdown-formatted content.
    */
   markdown?: string;
-  [k: string]: unknown;
 }
 export interface MessageError {
   /**
@@ -846,7 +809,6 @@ export interface MessageError {
    * Reflects the resource state and recommended action. 'recoverable': platform can resolve the condition in band, for example by modifying inputs or processing a related Action, and submit a new operation when needed. 'requires_buyer_input': merchant requires information their API doesn't support collecting programmatically (checkout incomplete). 'requires_buyer_review': buyer must authorize before order placement due to policy, regulatory, or entitlement rules. 'unrecoverable': no valid resource exists to act on, retry with new resource or inputs. Errors with 'requires_*' severity contribute to 'status: requires_escalation'.
    */
   severity: "recoverable" | "requires_buyer_input" | "requires_buyer_review" | "unrecoverable";
-  [k: string]: unknown;
 }
 export interface MessageWarning {
   /**
@@ -878,7 +840,6 @@ export interface MessageWarning {
    * Reference URL for more information (e.g., regulatory site, registry entry, policy page).
    */
   url?: string;
-  [k: string]: unknown;
 }
 export interface MessageInfo {
   /**
@@ -898,7 +859,6 @@ export interface MessageInfo {
    * Human-readable message.
    */
   content: string;
-  [k: string]: unknown;
 }
 /**
  * Snapshot of the attribution associated with the originating checkout. Read-only on the order.
