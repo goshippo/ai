@@ -92,7 +92,7 @@ export function defaultBufferDays(rate: DeliveryWindowInput): number {
  * tendered on Monday. earliest = ship date plus estimated_days in the chosen basis, at the start
  * of the day; latest = earliest plus the buffer in the same basis, at the end of the day. The
  * earliest bound is clamped forward to now, so a same-day service quoted at 15:00 never promises
- * a moment that has already passed.
+ * a moment that has already passed. Buffers below zero are treated as zero.
  *
  * UCP does not define whether earliest_fulfillment_time and latest_fulfillment_time mean handoff
  * to the carrier or arrival to the buyer: the two fields appear in no example and no prose, only
@@ -110,12 +110,14 @@ export function deliveryWindow(
   const offsetMs = (opts.destinationUtcOffsetMinutes ?? 0) * 60_000;
   const localNow = new Date(now.getTime() + offsetMs);
   const bufferOption = opts.bufferBusinessDays;
-  const buffer =
+  const buffer = Math.max(
+    0,
     bufferOption === undefined
       ? defaultBufferDays(rate)
       : typeof bufferOption === 'function'
         ? bufferOption(rate)
-        : bufferOption;
+        : bufferOption,
+  );
   const addDays = (opts.transitDayBasis ?? 'calendar') === 'business' ? addBusinessDays : addCalendarDays;
 
   const shipDate = firstBusinessDayOnOrAfter(localNow);

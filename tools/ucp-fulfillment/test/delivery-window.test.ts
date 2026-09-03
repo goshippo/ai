@@ -94,6 +94,17 @@ test('the buffer takes a number or a function of the rate', () => {
   );
 });
 
+test('negative buffers are clamped to zero', () => {
+  assert.deepEqual(deliveryWindow({ estimatedDays: 2 }, { now: THU, bufferBusinessDays: () => -3 }), {
+    earliest_fulfillment_time: '2026-09-05T00:00:00.000Z',
+    latest_fulfillment_time: '2026-09-05T23:59:59.000Z',
+  });
+  assert.deepEqual(deliveryWindow({ estimatedDays: 2 }, { now: THU, bufferBusinessDays: () => -3, transitDayBasis: 'business' }), {
+    earliest_fulfillment_time: '2026-09-07T00:00:00.000Z',
+    latest_fulfillment_time: '2026-09-07T23:59:59.000Z',
+  });
+});
+
 test('a destination offset shifts the day boundaries into the buyer day', () => {
   assert.deepEqual(deliveryWindow({ estimatedDays: 2 }, { now: THU, destinationUtcOffsetMinutes: -420 }), {
     earliest_fulfillment_time: '2026-09-05T07:00:00.000Z',
