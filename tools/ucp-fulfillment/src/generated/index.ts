@@ -6,5 +6,6 @@ export type {
   FulfillmentMethod,
   Expectation,
   Order,
+  PostalAddress,
   Total,
 } from './ucp.js';
