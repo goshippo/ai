@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ucp.dev/schemas/entry.json",
+  "title": "UCP Entry",
+  "description": "Synthetic root used only to generate TypeScript types for the schemas this library produces or consumes.",
+  "type": "object",
+  "properties": {
+    "fulfillment_option": { "$ref": "ucp/2026-08-25/shopping/types/fulfillment_option.json" },
+    "fulfillment_event": { "$ref": "ucp/2026-08-25/shopping/types/fulfillment_event.json" },
+    "fulfillment_group": { "$ref": "ucp/2026-08-25/shopping/types/fulfillment_group.json" },
+    "fulfillment_method": { "$ref": "ucp/2026-08-25/shopping/types/fulfillment_method.json" },
+    "expectation": { "$ref": "ucp/2026-08-25/shopping/types/expectation.json" },
+    "order": { "$ref": "ucp/2026-08-25/shopping/order.json" }
+  }
+}
