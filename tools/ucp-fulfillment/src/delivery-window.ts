@@ -52,7 +52,13 @@ export function firstBusinessDayOnOrAfter(date: Date): Date {
   return d;
 }
 
-/** Add whole business days (Monday to Friday, UTC, no holiday calendar). Does not mutate. */
+/**
+ * Add whole business days (Monday to Friday, UTC, no holiday calendar). Does not mutate.
+ *
+ * A zero-day step is the identity on the START date and does NOT roll a weekend forward, so
+ * addBusinessDays(aSaturday, 0) returns that Saturday. deliveryWindow never calls it that way: it
+ * always steps from firstBusinessDayOnOrAfter(now), which is already a weekday.
+ */
 export function addBusinessDays(start: Date, days: number): Date {
   const d = utcMidnight(start);
   let remaining = days;
@@ -122,8 +128,12 @@ export function deliveryWindow(
 
   const shipDate = firstBusinessDayOnOrAfter(localNow);
   const rawEarliest = addDays(shipDate, days);
-  const latest = endOfDay(addDays(rawEarliest, buffer));
+  const rawLatest = endOfDay(addDays(rawEarliest, buffer));
   const earliest = rawEarliest.getTime() < localNow.getTime() ? new Date(localNow.getTime()) : rawEarliest;
+  // latest is computed from the UNCLAMPED earliest, so a same-day rate quoted in the last second of
+  // a day would otherwise end before it starts (earliest 23:59:59.5, latest 23:59:59.0). Carry the
+  // clamp through rather than emitting an inverted window a Platform cannot render.
+  const latest = new Date(Math.max(rawLatest.getTime(), earliest.getTime()));
 
   return {
     earliest_fulfillment_time: new Date(earliest.getTime() - offsetMs).toISOString(),

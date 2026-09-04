@@ -47,7 +47,11 @@ export function carrierDisplayName(token: string, overrides?: Readonly<Record<st
     .trim()
     .split(/[_\s-]+/)
     .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    // The remainder is lowercased as well as the first letter uppercased, so a token Shippo happens
+    // to send in caps reads as a carrier name rather than as shouting in the buyer's timeline. Real
+    // Shippo tokens are lowercase, so this changes nothing for them; use `overrides` for a name
+    // whose internal capitalization matters, as the built-in table does for DHL eCommerce.
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
 }
 

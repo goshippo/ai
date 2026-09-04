@@ -24,6 +24,10 @@ test('an unknown token is title-cased, never leaked raw to a buyer', () => {
   assert.equal(carrierDisplayName('poste_italiane'), 'Poste Italiane');
   assert.equal(carrierDisplayName('x'), 'X');
   assert.equal(carrierDisplayName(''), '');
+  // The remainder of each word is lowercased, so a token Shippo happens to send in caps reads as
+  // a name rather than as shouting in the buyer's order timeline.
+  assert.equal(carrierDisplayName('ALLCAPS_TOKEN'), 'Allcaps Token');
+  assert.equal(carrierDisplayName('Better Trucks'), 'Better Trucks');
 });
 
 test('a merchant override wins over both the table and the fallback', () => {

@@ -29,6 +29,22 @@ test('an override supplies an exponent the table lacks, and is validated', () =>
   assert.equal(currencyExponent('USD', { USD: 0 }), 0);
   assert.throws(() => currencyExponent('MMM', { MMM: 7 }), InvalidAmountError);
   assert.throws(() => currencyExponent('MMM', { MMM: 1.5 }), InvalidAmountError);
+  // The message names the override that is wrong, not a monetary amount nobody passed.
+  assert.throws(
+    () => currencyExponent('MMM', { MMM: 7 }),
+    (error: unknown) =>
+      error instanceof InvalidAmountError &&
+      /currencyExponents\.MMM/.test(error.message) &&
+      !/Unparseable monetary amount/.test(error.message),
+  );
+});
+
+test('an unparseable amount keeps the message that describes an unparseable amount', () => {
+  assert.throws(
+    () => toMinorUnits('8,35', 'USD'),
+    (error: unknown) =>
+      error instanceof InvalidAmountError && /Unparseable monetary amount "8,35"/.test(error.message),
+  );
 });
 
 test('converts decimal strings exactly, with no float drift', () => {
@@ -63,7 +79,9 @@ test('accepts numbers and negative amounts, and never emits negative zero', () =
 });
 
 test('large amounts are exact or refused, never silently rounded', () => {
+  // The exact boundary pair: one minor unit below the maximum converts, one above is refused.
   assert.equal(toMinorUnits('90071992547409.91', 'USD'), 9007199254740991);
+  assert.throws(() => toMinorUnits('90071992547409.92', 'USD'), AmountRangeError);
   assert.equal(MAX_MINOR_UNITS, 9007199254740991);
   assert.throws(() => toMinorUnits('99999999999999.99', 'USD'), AmountRangeError);
   assert.throws(() => toMinorUnits('-99999999999999.99', 'USD'), AmountRangeError);

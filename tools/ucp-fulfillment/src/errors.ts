@@ -19,12 +19,21 @@ export abstract class UcpFulfillmentError extends Error {
   }
 }
 
-/** A monetary amount that is not a plain decimal number. Permanent. */
+/**
+ * A monetary amount this library refuses. Permanent.
+ *
+ * `reason` is the whole message and every branch that is NOT a Shippo decimal string supplies one:
+ * a bad currencyExponents override, an adjustAmount hook returning something that is not a
+ * non-negative integer, and an option whose totals carry no `total` entry are three different
+ * mistakes, and reporting all of them as "unparseable monetary amount" sends the reader looking at
+ * a decimal string nobody passed. Omitting `reason` keeps the decimal-string message.
+ */
 export class InvalidAmountError extends UcpFulfillmentError {
-  constructor(readonly amount: unknown) {
+  constructor(readonly amount: unknown, reason?: string) {
     super(
-      `Unparseable monetary amount ${JSON.stringify(amount)}: expected a decimal string such as "8.35", ` +
-        'with an optional leading minus and no grouping separators',
+      reason ??
+        `Unparseable monetary amount ${JSON.stringify(amount)}: expected a decimal string such as "8.35", ` +
+          'with an optional leading minus and no grouping separators',
       { retryable: false },
     );
     this.name = 'InvalidAmountError';
@@ -103,14 +112,26 @@ export class LineItemMismatchError extends UcpFulfillmentError {
   }
 }
 
-/** No tracking URL resolved and the caller asked for one. Permanent. */
+/**
+ * No tracking URL resolved and the caller asked for one. Permanent.
+ *
+ * The two causes need different remedies, so the message names which one applied: a blank tracking
+ * number defeats every candidate derived from one (merchant template, Shippo tracking page,
+ * built-in table) and cannot be fixed by adding a template, while a tracking number with no
+ * resolved candidate can.
+ */
 export class TrackingUrlUnresolvedError extends UcpFulfillmentError {
   constructor(readonly carrier: string, readonly trackingNumber: string) {
     super(
-      `No tracking_url resolved for ${carrier} ${trackingNumber}. Pass trackingUrl, the purchasing ` +
-        'transaction (tracking_url_provider), a trackingUrlTemplates entry, or shippoTrackingUserId. ' +
-        'UCP requires tracking_url once the event type is past processing in the fulfillment_event.json ' +
-        'field description only; it is not schema-enforced.',
+      (trackingNumber.trim()
+        ? `No tracking_url resolved for ${carrier} ${trackingNumber}: no explicit trackingUrl, no ` +
+          'transaction tracking_url_provider, no trackingUrlTemplates entry for this carrier, no ' +
+          'shippoTrackingUserId and no built-in url for this carrier. '
+        : `No tracking_number for ${carrier}, so every candidate derived from one is unavailable ` +
+          'and the event can carry neither tracking_number nor a url built from it. Pass ' +
+          'trackingUrl explicitly, or wait for a scan that carries a number. ') +
+        'UCP requires tracking_url once the event type is past processing in the ' +
+        'fulfillment_event.json field description only; it is not schema-enforced.',
       { retryable: false },
     );
     this.name = 'TrackingUrlUnresolvedError';
@@ -212,13 +233,16 @@ export class UnsignedWebhookError extends UcpFulfillmentError {
   }
 }
 
-/** A signer that tried to overwrite a header the digest depends on. Permanent. */
+/** A signer that returned one of the headers this library builds itself. Permanent. */
 export class SignerConflictError extends UcpFulfillmentError {
   constructor(readonly header: string) {
     super(
-      `The signer returned a conflicting ${header}. The RFC 9421 signature must cover the exact ` +
-        'body and headers this library built, so the signer may add Signature and Signature-Input ' +
-        'but may not replace Content-Digest or Content-Type.',
+      `The signer returned ${header}, which this library builds itself. The RFC 9421 signature must ` +
+        'cover the exact body and headers that are sent, so a signer may add ONLY Signature and ' +
+        'Signature-Input. Returning any of Content-Type, Content-Digest, Webhook-Id, ' +
+        'Webhook-Timestamp or UCP-Agent is refused, matched case-insensitively and whatever the ' +
+        'value, because HTTP header names are case-insensitive on the wire and a differently-cased ' +
+        'duplicate would be merged into the header the digest was computed for.',
       { retryable: false },
     );
     this.name = 'SignerConflictError';

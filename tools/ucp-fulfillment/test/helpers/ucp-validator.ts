@@ -16,7 +16,11 @@ const addFormats = addFormatsDefault as unknown as FormatsPlugin;
 const here = dirname(fileURLToPath(import.meta.url));
 const SCHEMA_ROOT = join(here, '..', '..', 'schemas', 'ucp', '2026-08-25');
 
-/** The eight UCP fulfillment_event types this library emits. Kept in step with FULFILLMENT_EVENT_TYPES. */
+/**
+ * The eight UCP fulfillment_event types this library emits, as the enum STRICT_FULFILLMENT_EVENT
+ * validates against. Keep in sync with FULFILLMENT_EVENT_TYPES in src/tracking.ts, which is the
+ * runtime list the library itself emits from; the two are hand-synced and a test pins them equal.
+ */
 export const FULFILLMENT_EVENT_TYPE_VALUES = [
   'processing',
   'shipped',
@@ -51,7 +55,9 @@ export const SCHEMA_IDS = {
  * The vendored fulfillment_event schema leaves three rules in prose: the event type vocabulary
  * lives in a description, line_items has no minItems, and "required if type != processing" for
  * tracking_number and tracking_url is a sentence rather than an if/then. This overlay makes all
- * three machine checkable for objects WE produce. It is additive and strictly narrower than the
+ * three machine checkable for objects WE produce. Its type enum comes from
+ * FULFILLMENT_EVENT_TYPE_VALUES above, which is the mirror of FULFILLMENT_EVENT_TYPES in
+ * src/tracking.ts: change one and change the other. It is additive and strictly narrower than the
  * vendored schema, so anything it rejects the spec text also rejects. The vendored files are
  * never edited.
  */
@@ -161,7 +167,7 @@ const knownKeys = new Map<string, Set<string>>();
  * else to collect every key the schema names, then rejects anything else. Never call it on a
  * merchant-supplied object, which may legitimately carry extensions.
  */
-export function assertOnlyKnownKeys(schemaId: string, value: Record<string, unknown>): void {
+export function assertOnlyKnownKeys(schemaId: string, value: object): void {
   instance();
   let known = knownKeys.get(schemaId);
   if (!known) {

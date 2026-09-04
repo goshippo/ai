@@ -51,7 +51,11 @@ export function currencyExponent(currency: string, overrides?: CurrencyExponents
   const override = overrides?.[code];
   if (override !== undefined) {
     if (!Number.isInteger(override) || override < 0 || override > 4) {
-      throw new InvalidAmountError(`currencyExponents.${code} = ${override}`);
+      throw new InvalidAmountError(
+        override,
+        `currencyExponents.${code} must be a whole number of minor-unit digits from 0 to 4, got ` +
+          `${JSON.stringify(override)}. ISO 4217 defines no currency outside that range.`,
+      );
     }
     return override;
   }

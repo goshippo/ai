@@ -80,6 +80,20 @@ test('an earliest bound is never in the past', () => {
   assert.ok(new Date(window.earliest_fulfillment_time as string) >= THU);
 });
 
+test('a same-day rate in the last second of the day never inverts the window', () => {
+  // earliest is clamped forward to now while latest is the end of the unclamped day, so the two
+  // bounds cross in the final second unless latest is pushed out with it.
+  const lastSecond = new Date('2026-09-03T23:59:59.500Z');
+  const window = deliveryWindow({ estimatedDays: 0 }, { now: lastSecond });
+  assert.equal(window.earliest_fulfillment_time, '2026-09-03T23:59:59.500Z');
+  assert.equal(window.latest_fulfillment_time, '2026-09-03T23:59:59.500Z');
+  assert.ok(
+    Date.parse(window.latest_fulfillment_time as string) >=
+      Date.parse(window.earliest_fulfillment_time as string),
+    'latest must never precede earliest',
+  );
+});
+
 test('the buffer takes a number or a function of the rate', () => {
   assert.deepEqual(deliveryWindow({ estimatedDays: 2 }, { now: THU, bufferBusinessDays: 0 }), {
     earliest_fulfillment_time: '2026-09-05T00:00:00.000Z',
