@@ -30,5 +30,4 @@ jobs:
       - name: Built entry exports the full public surface
         run: node -e "import('./dist/index.js').then((m) => { const n = Object.keys(m).length; if (n < 70) { console.error('expected at least 70 exports, got', n); process.exit(1); } console.log(n, 'exports'); })"
       - name: Core entry loads no third-party modules
-        run: |
-          node --input-type=module -e "await import('./dist/core.js'); const { getSourceMapsSupport } = await import('node:module'); void getSourceMapsSupport; const loaded = process.getBuiltinModule ? [] : []; const files = (await import('node:module')).default.builtinModules ? [] : []; void loaded; void files;"
+        run: node --experimental-loader=./scripts/count-deps.mjs -e "await import('./dist/core.js');"
