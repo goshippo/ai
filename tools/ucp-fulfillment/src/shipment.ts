@@ -1,21 +1,16 @@
+import type { PostalAddress } from './generated/index.js';
 import { DestinationIncompleteError } from './errors.js';
 
 /**
- * A UCP postal address, field for field from common/types/postal_address.json. No field is
- * required by the schema, and there is no email and no company: the buyer's email lives on the
- * checkout's buyer object, not on the address.
+ * A UCP postal address: the generated type from common/types/postal_address.json under a name that
+ * says whose address vocabulary it is. No field is required by the schema, and there is no email
+ * and no company: the buyer's email lives on the checkout's buyer object, not on the address.
+ *
+ * An ALIAS, deliberately, not a hand copy. A copy sits outside the CI drift check that regenerates
+ * src/generated/ucp.ts from the vendored schemas, so a UCP release that added a postal field would
+ * be dropped here in silence, which is the one thing this library promises never to do.
  */
-export interface UcpPostalAddress {
-  extended_address?: string;
-  street_address?: string;
-  address_locality?: string;
-  address_region?: string;
-  address_country?: string;
-  postal_code?: string;
-  first_name?: string;
-  last_name?: string;
-  phone_number?: string;
-}
+export type UcpPostalAddress = PostalAddress;
 
 /**
  * A UCP shipping destination: a postal address plus an id and a shipping_address type. Both are

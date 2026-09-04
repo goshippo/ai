@@ -95,9 +95,17 @@ test('the overlay enumerates exactly the eight types the library emits', () => {
 });
 
 test('formats are enforced, so a bad URL or timestamp is rejected', () => {
-  assert.throws(
-    () => validateUcp(SCHEMA_IDS.fulfillmentEvent, { ...VALID_EVENT, tracking_url: 'not a url at all' }),
-    /"format": "uri"/,
+  // The uri format keyword is what catches a tracking_url that is not a URL. Without ajv-formats
+  // registered, Ajv ignores `format` entirely and every string below would validate.
+  for (const badUrl of ['not a url', 'not a url at all', 'merchant.example/track', '']) {
+    assert.throws(
+      () => validateUcp(SCHEMA_IDS.fulfillmentEvent, { ...VALID_EVENT, tracking_url: badUrl }),
+      /"format": "uri"/,
+      JSON.stringify(badUrl),
+    );
+  }
+  assert.doesNotThrow(() =>
+    validateUcp(SCHEMA_IDS.fulfillmentEvent, { ...VALID_EVENT, tracking_url: 'https://merchant.example/t/1' }),
   );
   assert.throws(
     () => validateUcp(SCHEMA_IDS.fulfillmentEvent, { ...VALID_EVENT, occurred_at: 'yesterday' }),

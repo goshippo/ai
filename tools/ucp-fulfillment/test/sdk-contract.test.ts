@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { Shippo } from 'shippo';
 import type {
   Rate,
   Track,
@@ -10,6 +11,7 @@ import type {
 import type { ShippoRateInput } from '../src/rates.ts';
 import type { ShippoTrackInput } from '../src/tracking.ts';
 import type { ShippoAddressInput, ShippoParcelInput, ShippoShipmentRequest } from '../src/shipment.ts';
+import type { ShippoSdkLike } from '../src/shippo-client.ts';
 
 /**
  * Compile-time only. The mapping modules describe the Shippo objects structurally so that they
@@ -29,6 +31,12 @@ type _AddressSatisfiesSdk = AssertAssignable<AddressCreateRequest, ShippoAddress
 type _ShipmentSatisfiesSdk = AssertAssignable<ShipmentCreateRequest, ShippoShipmentRequest>;
 
 test('the shippo SDK types and this library input types still agree', () => {
+  // The three methods createShippoClient actually calls, pinned by construction rather than by
+  // type alone: a renamed SDK method (shipments.create, rates.listShipmentRatesByCurrencyCode,
+  // trackingStatus.get) fails this line. The constructor only builds an object; nothing is called
+  // on it and no request is made, so the placeholder key never reaches Shippo.
+  const like: ShippoSdkLike = new Shippo({ apiKeyHeader: 'shippo_test_placeholder' });
+  void like;
   // The assertions above are erased at runtime; this test exists so the file is part of the
   // suite and a type error here fails `npm run typecheck` with a clear message.
   const marker: _RateSatisfiesInput | undefined = undefined;

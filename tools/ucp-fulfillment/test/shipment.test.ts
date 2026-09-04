@@ -282,6 +282,33 @@ test('a domestic shipment warns about nothing, and an address id yields no guess
   );
 });
 
+test('exactly one end stored as an address id is still unknowable, so still no warning', () => {
+  const berlin = {
+    street_address: 'Unter den Linden 5',
+    address_locality: 'Berlin',
+    postal_code: '10117',
+    address_country: 'DE',
+  };
+  // Both mixed cases would warn twice if the other end were spelled out, since this route crosses a
+  // border with neither a customs declaration nor a destination phone. Internationality needs both
+  // ends, so the warnings are withheld rather than guessed.
+  assert.deepEqual(
+    buildShipmentRequestResult({ from: 'adr_from_1', to: berlin, parcels: [PARCEL] }).warnings,
+    [],
+  );
+  assert.deepEqual(
+    buildShipmentRequestResult({ from: WAREHOUSE, to: 'adr_to_1', parcels: [PARCEL] }).warnings,
+    [],
+  );
+  // Spelled out at both ends, the same route does warn twice, which is what the mixed cases hide.
+  assert.deepEqual(
+    buildShipmentRequestResult({ from: WAREHOUSE, to: berlin, parcels: [PARCEL] }).warnings.map(
+      (warning) => warning.split(':')[0],
+    ),
+    [SHIPMENT_WARNINGS.internationalWithoutCustoms, SHIPMENT_WARNINGS.destinationMissingPhoneInternational],
+  );
+});
+
 test('international is decided on normalized country codes', () => {
   assert.equal(isInternational({ country: 'US' }, { country: 'US' }), false);
   assert.equal(isInternational({ country: 'US' }, { country: 'us' }), false);

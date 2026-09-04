@@ -9,6 +9,7 @@ import {
   buildFulfillmentEvent,
   buildFulfillmentEventResult,
   buildFulfillmentEvents,
+  buildFulfillmentEventsResult,
   buildExpectation,
   buildProcessingEvent,
   type ShippoTrackInput,
@@ -28,7 +29,7 @@ const track = (name: string): ShippoTrackInput => normalizeTrack(payload(name).d
 const LINE_ITEMS = [{ id: 'li_shirt', quantity: 2 }];
 
 /** Every event the library emits is checked three ways, with the overlay standing in for prose. */
-const checkEvent = (event: Record<string, unknown>) => {
+const checkEvent = (event: object) => {
   validateUcp(SCHEMA_IDS.strictFulfillmentEvent, event);
   assertOnlyKnownKeys(SCHEMA_IDS.fulfillmentEvent, event);
 };
@@ -289,6 +290,30 @@ test('tracking_url precedence, all five steps (design decision 3)', () => {
   assert.equal(resolveTrackingUrl(t, {}), 'https://www.ups.com/track?tracknum=1Z999AA10123456784');
 });
 
+test('a throwing merchant template cannot defeat a higher-precedence explicit URL', () => {
+  const t = track('track_updated.accepted.json');
+  const trackingUrlTemplates = {
+    ups: () => {
+      throw new Error('merchant template blew up');
+    },
+  };
+  // Candidates are evaluated lazily in precedence order, so the explicit URL wins without the
+  // lower-precedence template ever running.
+  assert.equal(
+    resolveTrackingUrl(t, { trackingUrl: 'https://explicit.example/t', trackingUrlTemplates }),
+    'https://explicit.example/t',
+  );
+  assert.equal(
+    resolveTrackingUrl(t, {
+      transaction: { trackingUrlProvider: 'https://transaction.example/t' },
+      trackingUrlTemplates,
+    }),
+    'https://transaction.example/t',
+  );
+  // With nothing above it the template is still reached, so a merchant bug is not swallowed.
+  assert.throws(() => resolveTrackingUrl(t, { trackingUrlTemplates }), /merchant template blew up/);
+});
+
 test('a blank candidate falls through instead of becoming the answer', () => {
   const t = track('track_updated.accepted.json');
   assert.equal(resolveTrackingUrl(t, { trackingUrl: '   ' }), 'https://www.ups.com/track?tracknum=1Z999AA10123456784');
@@ -308,8 +333,10 @@ test('an unresolvable URL past processing is omitted with a named warning, and t
   assert.equal(event.tracking_url, undefined);
   assert.equal(event.type, 'delivered');
   assert.deepEqual(warnings, [
-    'tracking_url omitted for deutsche_post LX000000000DE on a delivered event: no explicit url, no transaction tracking_url_provider, no merchant template, no shippoTrackingUserId and no built-in url for this carrier',
+    'tracking_url_omitted: no tracking_url for deutsche_post LX000000000DE on a delivered event: no explicit url, no transaction tracking_url_provider, no merchant template, no shippoTrackingUserId and no built-in url for this carrier',
   ]);
+  // The code is a stable prefix a merchant can switch on, matching SHIPMENT_WARNINGS.
+  assert.ok(warnings[0].startsWith('tracking_url_omitted: '));
   // The omission is deliberate and is NOT strict-overlay valid: the overlay encodes the spec's
   // prose rule, and the library prefers a reported omission to a webhook endpoint that loops.
   validateUcp(SCHEMA_IDS.fulfillmentEvent, event);
@@ -328,7 +355,7 @@ test('a missing tracking number past processing is warned about too', () => {
     trackingUrl: 'https://explicit.example/t',
   });
   assert.equal(event.tracking_number, undefined);
-  assert.deepEqual(warnings, ['tracking_number missing for ups on a shipped event']);
+  assert.deepEqual(warnings, ['tracking_number_missing: no tracking_number for ups on a shipped event']);
   assert.throws(
     () => buildFulfillmentEvent(numberless, { lineItems: LINE_ITEMS, trackingUrl: 'https://x/y', requireTrackingUrl: true }),
     TrackingUrlUnresolvedError,
@@ -350,8 +377,8 @@ test('a blank tracking number defeats the Shippo tracking page too, not just the
   assert.equal(event.tracking_number, undefined);
   assert.equal(event.type, 'shipped');
   assert.deepEqual(warnings, [
-    `tracking_url omitted for ups ${blankNumber} on a shipped event: no explicit url, no transaction tracking_url_provider, no merchant template, no shippoTrackingUserId and no built-in url for this carrier`,
-    'tracking_number missing for ups on a shipped event',
+    `tracking_url_omitted: no tracking_url for ups ${blankNumber} on a shipped event: no explicit url, no transaction tracking_url_provider, no merchant template, no shippoTrackingUserId and no built-in url for this carrier`,
+    'tracking_number_missing: no tracking_number for ups on a shipped event',
   ]);
   // An explicit trackingUrl is not derived from the tracking number, so it still resolves even when
   // the number is blank (matching the precedent set by the test above, which pins the same thing).
@@ -426,6 +453,60 @@ test('a track without tracking_status cannot produce an event', () => {
   assert.throws(() => buildFulfillmentEvent(t, { lineItems: LINE_ITEMS }), MissingTrackingStatusError);
 });
 
+test('a tracking status with a status but no timestamp cannot produce an event either', () => {
+  // occurred_at is required on fulfillment_event and neither status_date nor object_created is
+  // present, so there is nothing to date the event with and nothing is invented.
+  const base = track('track_updated.delivered.json');
+  const undated: ShippoTrackInput = {
+    ...base,
+    trackingStatus: { status: 'DELIVERED', objectId: 'ts_undated' },
+  };
+  assert.throws(() => buildFulfillmentEvent(undated, { lineItems: LINE_ITEMS }), MissingTrackingStatusError);
+  assert.throws(
+    () => buildFulfillmentEventResult(undated, { lineItems: LINE_ITEMS }),
+    MissingTrackingStatusError,
+  );
+});
+
+test('an unreadable timestamp names the field it came from', () => {
+  const base = track('track_updated.delivered.json');
+  assert.throws(
+    () =>
+      buildFulfillmentEvent(
+        { ...base, trackingStatus: { ...base.trackingStatus!, statusDate: 'yesterday' } },
+        { lineItems: LINE_ITEMS },
+      ),
+    (error: unknown) =>
+      error instanceof MalformedTrackError && error.field.startsWith('tracking_status.status_date'),
+  );
+  assert.throws(
+    () =>
+      buildFulfillmentEvent(
+        { ...base, trackingStatus: { status: 'DELIVERED', objectCreated: 'whenever' } },
+        { lineItems: LINE_ITEMS },
+      ),
+    (error: unknown) =>
+      error instanceof MalformedTrackError && error.field.startsWith('tracking_status.object_created'),
+  );
+  assert.throws(
+    () =>
+      buildProcessingEvent(
+        { objectId: 'txn_1', objectCreated: 'whenever' },
+        { lineItems: LINE_ITEMS, carrier: 'ups' },
+      ),
+    (error: unknown) =>
+      error instanceof MalformedTrackError && error.field.startsWith('transaction.object_created'),
+  );
+  assert.throws(
+    () =>
+      buildProcessingEvent(
+        { objectId: 'txn_1' },
+        { lineItems: LINE_ITEMS, carrier: 'ups', occurredAt: new Date('nope') },
+      ),
+    (error: unknown) => error instanceof MalformedTrackError && error.field.startsWith('occurredAt'),
+  );
+});
+
 test('an explicit id wins, and a blank status_details produces no description', () => {
   const t = track('track_updated.accepted.json');
   const event = buildFulfillmentEvent(
@@ -434,10 +515,7 @@ test('an explicit id wins, and a blank status_details produces no description', 
   );
   assert.equal(event.id, 'evt_custom');
   assert.equal(event.description, undefined);
-  // Unlike the golden tests, nothing here narrowed `event` via assert.deepEqual, so it is still
-  // typed as the generated FulfillmentEvent, which (like the other generated UCP types) carries
-  // no index signature; the established idiom for that mismatch is a cast through `unknown`.
-  checkEvent(event as unknown as Record<string, unknown>);
+  checkEvent(event);
 });
 
 test('two same-second scans with no object_id get distinct, stable ids', () => {
@@ -491,6 +569,42 @@ test('golden: buildFulfillmentEvents backfills a shipment already in flight', ()
   assert.equal(fixedIdEvents.length, 2);
   assert.notEqual(fixedIdEvents[0].id, fixedIdEvents[1].id);
   assert.notEqual(fixedIdEvents[0].id, 'evt_fixed');
+});
+
+test('buildFulfillmentEventsResult reports the backfill warnings beside the events', () => {
+  // deutsche_post has no built-in tracking URL and no user id is supplied, so every scan past
+  // processing omits tracking_url and says so.
+  const base = normalizeTrack(payload('track.test_mode.json'));
+  const t: ShippoTrackInput = {
+    ...base,
+    carrier: 'deutsche_post',
+    trackingHistory: [
+      { objectId: 'h1', status: 'TRANSIT', statusDate: '2018-07-29T16:44:42.589Z' },
+      { objectId: 'h2', status: 'TRANSIT', statusDate: '2018-07-29T18:10:00.000Z' },
+    ],
+  };
+  const { events, warnings } = buildFulfillmentEventsResult(t, { lineItems: LINE_ITEMS });
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.map((event) => event.type), ['in_transit', 'in_transit']);
+  assert.deepEqual(events.map((event) => event.tracking_url), [undefined, undefined]);
+  // Two scans, one warning: the two omissions are the same code and the same sentence, so they
+  // deduplicate rather than repeating once per scan.
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /^tracking_url_omitted: /);
+  // A scan of a different type carries its own sentence, so deduplication never hides one.
+  const mixed = buildFulfillmentEventsResult(
+    { ...t, trackingHistory: [...(t.trackingHistory ?? []), { objectId: 'h3', status: 'DELIVERED', statusDate: '2018-07-30T09:00:00.000Z' }] },
+    { lineItems: LINE_ITEMS },
+  );
+  assert.equal(mixed.events.length, 3);
+  assert.equal(mixed.warnings.length, 2);
+  assert.ok(mixed.warnings.every((warning) => warning.startsWith('tracking_url_omitted: ')));
+  // The bare form is unchanged and returns exactly the same events.
+  assert.deepEqual(buildFulfillmentEvents(t, { lineItems: LINE_ITEMS }), events);
+  assert.deepEqual(buildFulfillmentEventsResult({ carrier: 'ups', trackingNumber: '1Z' }, { lineItems: LINE_ITEMS }), {
+    events: [],
+    warnings: [],
+  });
 });
 
 test('golden: an expectation is the buyer-facing promise beside the event log', () => {

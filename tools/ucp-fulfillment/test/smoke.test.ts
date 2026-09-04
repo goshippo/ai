@@ -44,6 +44,7 @@ const FUNCTIONS = [
   'buildFulfillmentEvent',
   'buildFulfillmentEventResult',
   'buildFulfillmentEvents',
+  'buildFulfillmentEventsResult',
   'buildExpectation',
   'buildProcessingEvent',
   'assertOrderShape',
@@ -112,7 +113,7 @@ test('the core entry is the full surface minus the SDK client', () => {
   assert.equal(apiNames.has('createShippoClient'), true);
   for (const name of coreNames) assert.equal(apiNames.has(name), true, `${name} missing from the root entry`);
   assert.equal(apiNames.size, coreNames.size + 1);
-  assert.equal(coreNames.size, 86);
+  assert.equal(coreNames.size, 87);
 });
 
 test('every library error class descends from the one base a consumer catches', () => {

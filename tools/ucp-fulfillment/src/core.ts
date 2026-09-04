@@ -114,6 +114,7 @@ export {
   buildFulfillmentEvent,
   buildFulfillmentEventResult,
   buildFulfillmentEvents,
+  buildFulfillmentEventsResult,
   buildExpectation,
   buildProcessingEvent,
   type BuildEventOptions,

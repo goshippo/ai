@@ -21,6 +21,9 @@ import type { ShippingDestinationLike } from './shipment.js';
  * them and the strict overlay can pin them. UCP's own vocabulary is OPEN: fulfillment_event.type
  * is a bare string whose common values live in a description, and the order spec says a business
  * may use any value that makes sense. BuildEventOptions.type is how a merchant does that.
+ *
+ * Keep in sync with FULFILLMENT_EVENT_TYPE_VALUES in test/helpers/ucp-validator.ts, which is the
+ * enum the STRICT_FULFILLMENT_EVENT overlay validates against.
  */
 export const FULFILLMENT_EVENT_TYPES = [
   'processing',
@@ -301,6 +304,11 @@ export function mapTrackingStatus(
 /**
  * Design decision 3, in precedence order. A blank candidate falls through to the next one.
  *
+ * Candidates are evaluated LAZILY, one at a time, and the first resolved one wins: a merchant
+ * template is arbitrary caller code, and building the whole list up front let a template that
+ * throws defeat an explicit trackingUrl that outranks it. A template with nothing above it is
+ * still reached, so a merchant bug surfaces rather than being swallowed.
+ *
  * The three candidates built FROM the tracking number (merchant template, Shippo tracking page,
  * built-in table) are computed from a single trimmed value, and contribute nothing at all when
  * that value is blank: shippoTrackingPageUrl in particular has no blank guard of its own, and
@@ -321,16 +329,24 @@ export function resolveTrackingUrl(
   // THIS carrier ranks here. carrierTrackingUrl falls through to the built-in table when no
   // template matches, which would return a built-in URL at this position and leave the merchant's
   // own Shippo tracking page unreachable for USPS, UPS, FedEx and DHL Express.
-  const candidates = [
-    opts.trackingUrl,
-    opts.transaction?.trackingUrlProvider,
-    trackingNumber ? templateTrackingUrl(track.carrier, trackingNumber, opts.trackingUrlTemplates) : undefined,
-    trackingNumber && opts.shippoTrackingUserId
-      ? shippoTrackingPageUrl(opts.shippoTrackingUserId, track.carrier, trackingNumber)
-      : undefined,
-    trackingNumber ? carrierTrackingUrl(track.carrier, trackingNumber) : undefined,
+  const candidates: Array<() => string | undefined> = [
+    () => opts.trackingUrl,
+    () => opts.transaction?.trackingUrlProvider,
+    () =>
+      trackingNumber
+        ? templateTrackingUrl(track.carrier, trackingNumber, opts.trackingUrlTemplates)
+        : undefined,
+    () =>
+      trackingNumber && opts.shippoTrackingUserId
+        ? shippoTrackingPageUrl(opts.shippoTrackingUserId, track.carrier, trackingNumber)
+        : undefined,
+    () => (trackingNumber ? carrierTrackingUrl(track.carrier, trackingNumber) : undefined),
   ];
-  return candidates.map((candidate) => candidate?.trim()).find((candidate): candidate is string => Boolean(candidate));
+  for (const candidate of candidates) {
+    const url = candidate()?.trim();
+    if (url) return url;
+  }
+  return undefined;
 }
 
 const NAIVE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
@@ -339,12 +355,20 @@ const NAIVE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
  * Shippo documents status_date as UTC, and its test-mode payloads omit the offset. Reading a
  * naive string with the platform's local timezone would make every golden move with TZ, so an
  * offset-less timestamp is explicitly read as UTC.
+ *
+ * `field` is the path the value came from, so the MalformedTrackError names where to look rather
+ * than saying only that some timestamp somewhere was unreadable. An Invalid Date is refused here
+ * too: Date.prototype.toISOString throws a bare RangeError on one, which would escape this
+ * library's error taxonomy.
  */
-function toIso(value: Date | string): string {
-  if (value instanceof Date) return value.toISOString();
-  const normalized = NAIVE_TIMESTAMP.test(value.trim()) ? `${value.trim().replace(' ', 'T')}Z` : value;
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) throw new MalformedTrackError(`tracking_status timestamp ${value}`);
+function toIso(value: Date | string, field: string): string {
+  const parsed =
+    value instanceof Date
+      ? value
+      : new Date(NAIVE_TIMESTAMP.test(value.trim()) ? `${value.trim().replace(' ', 'T')}Z` : value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new MalformedTrackError(`${field} is not a readable timestamp: ${JSON.stringify(String(value))}`);
+  }
   return parsed.toISOString();
 }
 
@@ -407,15 +431,18 @@ export function buildFulfillmentEventResult(
   const trackingUrl = resolveTrackingUrl(track, opts);
   const trackingNumber = track.trackingNumber.trim();
   const pastProcessing = type !== 'processing';
+  // Both warnings lead with a stable code, the way SHIPMENT_WARNINGS does, so a merchant switches
+  // on the prefix rather than parsing the sentence after it. These two are what surfaces on
+  // TrackWebhookPlan.warnings, which is the warning list merchants actually read.
   if (pastProcessing && !trackingUrl) {
     warnings.push(
-      `tracking_url omitted for ${track.carrier} ${track.trackingNumber} on a ${type} event: ` +
-        'no explicit url, no transaction tracking_url_provider, no merchant template, ' +
-        'no shippoTrackingUserId and no built-in url for this carrier',
+      `tracking_url_omitted: no tracking_url for ${track.carrier} ${track.trackingNumber} on a ` +
+        `${type} event: no explicit url, no transaction tracking_url_provider, no merchant ` +
+        'template, no shippoTrackingUserId and no built-in url for this carrier',
     );
   }
   if (pastProcessing && !trackingNumber) {
-    warnings.push(`tracking_number missing for ${track.carrier} on a ${type} event`);
+    warnings.push(`tracking_number_missing: no tracking_number for ${track.carrier} on a ${type} event`);
   }
   if (pastProcessing && opts.requireTrackingUrl && (!trackingUrl || !trackingNumber)) {
     throw new TrackingUrlUnresolvedError(track.carrier, track.trackingNumber);
@@ -427,7 +454,10 @@ export function buildFulfillmentEventResult(
     );
   }
 
-  const occurredAt = toIso(occurred);
+  const occurredAt = toIso(
+    occurred,
+    occurredAtSource === 'status_date' ? 'tracking_status.status_date' : 'tracking_status.object_created',
+  );
   const event: FulfillmentEvent = {
     id: opts.id ?? eventId(track, status, occurredAt),
     occurred_at: occurredAt,
@@ -459,6 +489,36 @@ export function buildFulfillmentEvents(track: ShippoTrackInput, opts: BuildEvent
   return (track.trackingHistory ?? []).map((status) =>
     buildFulfillmentEvent({ ...track, trackingStatus: status }, perEntryOpts),
   );
+}
+
+/**
+ * The reporting form of buildFulfillmentEvents, mirroring buildFulfillmentEventResult: every
+ * history entry as an event, oldest first, plus the warnings the whole backfill produced.
+ *
+ * Warnings are collected per event and DEDUPLICATED on the full string, which is the code plus the
+ * sentence: a carrier with no resolvable tracking URL would otherwise repeat the same omission once
+ * per scan, and a long history turns one fact into forty lines of log. Two scans that differ (a
+ * different event type, say) keep their own sentences, so deduplication never hides one.
+ */
+export function buildFulfillmentEventsResult(
+  track: ShippoTrackInput,
+  opts: BuildEventOptions,
+): { events: FulfillmentEvent[]; warnings: string[] } {
+  // Same reasoning as buildFulfillmentEvents: id and type are per-status, never per-track.
+  const { id: _ignoredId, type: _ignoredType, ...perEntryOpts } = opts;
+  const events: FulfillmentEvent[] = [];
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  for (const status of track.trackingHistory ?? []) {
+    const result = buildFulfillmentEventResult({ ...track, trackingStatus: status }, perEntryOpts);
+    events.push(result.event);
+    for (const warning of result.warnings) {
+      if (seen.has(warning)) continue;
+      seen.add(warning);
+      warnings.push(warning);
+    }
+  }
+  return { events, warnings };
 }
 
 /**
@@ -500,7 +560,10 @@ export function buildProcessingEvent(
 ): FulfillmentEvent {
   if (!validLineItems(opts.lineItems)) throw new LineItemsRequiredError();
   const trackingNumber = transaction.trackingNumber?.trim();
-  const occurredAt = toIso(opts.occurredAt ?? transaction.objectCreated ?? new Date());
+  const occurredAt = toIso(
+    opts.occurredAt ?? transaction.objectCreated ?? new Date(),
+    opts.occurredAt !== undefined ? 'occurredAt' : 'transaction.object_created',
+  );
   const event: FulfillmentEvent = {
     id: opts.id ?? `${transaction.objectId ?? trackingNumber ?? 'transaction'}:processing`,
     occurred_at: occurredAt,
