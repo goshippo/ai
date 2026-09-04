@@ -47,7 +47,13 @@ export interface TrackWebhookBuildOptions {
   webhookUrl: string;
   /** The merchant's own /.well-known/ucp profile URL. */
   businessProfileUrl: string;
-  /** Inbound request headers, so the handler can check Shippo-API-Version. */
+  /**
+   * Inbound request headers, so the handler can check Shippo-API-Version. OPTIONAL, and the
+   * version refusal runs ONLY when this is passed. Without it an old-version payload (a Transaction
+   * where this library expects a Track) degrades to MalformedTrackError('carrier') and a
+   * build_failed skip instead of the clear ShippoApiVersionError, so pass the headers through as
+   * the worker example in the README does.
+   */
   headers?: Record<string, string | undefined>;
   /** Accept Shippo test-mode payloads. Default false: test traffic must not mutate real orders. */
   allowTestMode?: boolean;
@@ -97,6 +103,31 @@ export type TrackWebhookResult =
       status: number;
     };
 
+/**
+ * The oldest Shippo API version whose track_updated payload carries a Track rather than a
+ * Transaction.
+ */
+const SHIPPO_API_VERSION_FLOOR = '2018-02-08';
+
+/**
+ * Whether a Shippo-API-Version header sits below the floor, compared as DATES.
+ *
+ * A lexicographic string compare passes an unpadded version such as `2018-2-8`, which sorts above
+ * `2018-02-08` because '2' > '0' at the fifth character. Both sides are parsed as a zero-padded
+ * YYYY-MM-DD at UTC midnight instead, which is timezone independent; anything that is not that
+ * shape, or that is a real string but not a real date, counts as below the floor rather than as
+ * good enough, because a version this library cannot read is not a version it can vouch for.
+ */
+function apiVersionBelowFloor(version: string, floor: string): boolean {
+  const asUtcDay = (value: string): number => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return Number.NaN;
+    return Date.parse(`${value.trim()}T00:00:00Z`);
+  };
+  const parsed = asUtcDay(version);
+  if (Number.isNaN(parsed)) return true;
+  return parsed < asUtcDay(floor);
+}
+
 function headerValue(headers: Record<string, string | undefined> | undefined, name: string): string | undefined {
   if (!headers) return undefined;
   const wanted = name.toLowerCase();
@@ -123,7 +154,8 @@ function headerValue(headers: Record<string, string | undefined> | undefined, na
  * A failed trust check still throws, because a rejected signature is not a payload to acknowledge.
  * An old Shippo API version on a track_updated payload also still throws, for the same reason;
  * on any other event type it is irrelevant and the payload is skipped as not_track_updated
- * instead.
+ * instead. That version check runs only when `headers` is passed, which is why the worker example
+ * in the README passes them.
  */
 export async function buildTrackWebhookRequest(
   rawBody: string,
@@ -149,7 +181,9 @@ export async function buildTrackWebhookRequest(
   // payload this library is actually about to read as a Track. An unrelated event type (say,
   // transaction_created) is skipped regardless of the sender's API version, not thrown for it.
   const version = headerValue(opts.headers, 'shippo-api-version');
-  if (version && version < '2018-02-08') throw new ShippoApiVersionError(version);
+  if (version && apiVersionBelowFloor(version, SHIPPO_API_VERSION_FLOOR)) {
+    throw new ShippoApiVersionError(version);
+  }
 
   try {
     if (envelope.test === true && !opts.allowTestMode) return { handled: false, reason: 'test_mode' };

@@ -53,7 +53,7 @@ const statusFetch = (status: number): FetchLike => async () => ({
 test('the fixture is a valid UCP Order', () => {
   const o = order();
   validateUcp(SCHEMA_IDS.order, o);
-  assertOnlyKnownKeys(SCHEMA_IDS.order, o as unknown as Record<string, unknown>);
+  assertOnlyKnownKeys(SCHEMA_IDS.order, o);
   assert.doesNotThrow(() => assertOrderShape(o));
 });
 
@@ -82,6 +82,31 @@ test('assertOrderShape catches a non-array fulfillment.events before it becomes 
   );
   // A well-formed fulfillment with events omitted or null is still fine.
   assert.doesNotThrow(() => assertOrderShape({ ...order(), fulfillment: { expectations: [] } }));
+});
+
+test('assertOrderShape catches a line item with no quantity before it becomes a raw TypeError', () => {
+  const noQuantity = { ...order(), line_items: [{ id: 'li_shirt' }] };
+  assert.throws(
+    () => assertOrderShape(noQuantity),
+    (error: unknown) =>
+      error instanceof InvalidOrderError &&
+      error.problems.some((problem) => problem.includes('quantity')) &&
+      error.retryable === false,
+  );
+  for (const bad of [
+    { line_items: ['li_shirt'] },
+    { line_items: [{ quantity: { total: 2, fulfilled: 0 } }] },
+    { line_items: [{ id: 'li_shirt', quantity: { total: 2.5, fulfilled: 0 } }] },
+    { line_items: [{ id: 'li_shirt', quantity: { total: 2 } }] },
+    { line_items: [{ id: 'li_shirt', quantity: { total: 2, fulfilled: 0, original: '2' } }] },
+  ]) {
+    assert.throws(() => assertOrderShape({ ...order(), ...bad }), InvalidOrderError, JSON.stringify(bad));
+  }
+  // The fixture's own line items still pass, and `original` stays optional.
+  assert.doesNotThrow(() => assertOrderShape(order()));
+  assert.doesNotThrow(() =>
+    assertOrderShape({ ...order(), line_items: [{ id: 'li_shirt', quantity: { total: 2, fulfilled: 0 } }] }),
+  );
 });
 
 test('appendFulfillmentEvent appends once, never mutates, and copies line_items', () => {
@@ -175,6 +200,22 @@ test('a stale non-terminal event never lands after a terminal one', () => {
   // A LATER non-terminal event is real news and is kept.
   const newer = { ...EVENT, id: 'n', type: 'failed_attempt', occurred_at: '2026-09-04T10:00:00.000Z' };
   assert.equal(classifyEvent(withTerminal, newer), 'new');
+});
+
+test('a stored terminal event with an unreadable occurred_at still supersedes a later scan', () => {
+  // Date.parse returns NaN, the comparison used to be false, and the stale guard quietly switched
+  // off. Fail closed: the terminal event supersedes anything non-terminal regardless of its clock.
+  const withTerminal = {
+    ...order(),
+    fulfillment: {
+      expectations: [],
+      events: [{ ...EVENT, id: 'evt_delivered', type: 'delivered', occurred_at: 'not a timestamp' }],
+    },
+  } as unknown as Order;
+  assert.equal(classifyEvent(withTerminal, { ...EVENT, id: 'evt_scan', type: 'in_transit' }), 'stale');
+  // A terminal event is still always allowed through, and a redelivery is still a duplicate.
+  assert.equal(classifyEvent(withTerminal, { ...EVENT, id: 'evt_returned', type: 'returned_to_sender' }), 'new');
+  assert.equal(classifyEvent(withTerminal, { ...EVENT, id: 'evt_delivered', type: 'delivered' }), 'duplicate');
 });
 
 test('a terminal event is always allowed, even out of order, so a return after a delivery is recorded', () => {
@@ -299,6 +340,42 @@ test('the business profile URL is validated locally rather than at the platform'
       bad,
     );
   }
+});
+
+test('a profile host carrying a quote or a backslash is rejected', () => {
+  // new URL keeps a quote in the host verbatim. UCP-Agent is an RFC 8941 quoted string, so such a
+  // host emits profile="https://ho"st..." which the Platform canonicalizes differently from us.
+  for (const bad of [
+    'https://ho"st.example/.well-known/ucp',
+    'https://ho\\st.example/.well-known/ucp',
+  ]) {
+    assert.throws(
+      () => buildOrderEventRequest({ order: order(), event: EVENT, webhookUrl: WEBHOOK_URL, businessProfileUrl: bad }),
+      InvalidOrderError,
+      bad,
+    );
+  }
+});
+
+test('webhookUrl is validated too, since it is the URL that receives the order snapshot', () => {
+  for (const bad of ['not a url', 'ftp://platform.example/hook', '/webhooks/ucp', 'javascript:0']) {
+    assert.throws(
+      () => buildOrderEventRequest({ order: order(), event: EVENT, webhookUrl: bad, businessProfileUrl: PROFILE }),
+      (error: unknown) =>
+        error instanceof InvalidOrderError && error.problems.some((problem) => problem.includes('webhookUrl')),
+      bad,
+    );
+  }
+  // http is allowed, because a merchant's first run of this flow is against a local receiver.
+  assert.equal(
+    buildOrderEventRequest({
+      order: order(),
+      event: EVENT,
+      webhookUrl: 'http://localhost:3000/webhooks/ucp',
+      businessProfileUrl: PROFILE,
+    }).url,
+    'http://localhost:3000/webhooks/ucp',
+  );
 });
 
 test('the business profile URL is normalized to its href, not passed through raw', () => {

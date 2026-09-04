@@ -55,6 +55,22 @@ test('a missing or malformed header is rejected before any hashing', () => {
   assert.throws(() => verifyShippoSignature(BODY, `t=${TIMESTAMP},v1=zz`, SECRET, { now: AT }), /digest mismatch/);
 });
 
+test('a signature header that repeats t or v1 is malformed, not last value wins', () => {
+  const genuine = sign(BODY, SECRET, TIMESTAMP);
+  const v1 = genuine.slice(genuine.indexOf('v1='));
+  // Appending a second v1 after a wrong one used to verify: the last value won.
+  assert.throws(
+    () => verifyShippoSignature(BODY, `t=${TIMESTAMP},v1=deadbeef,${v1}`, SECRET, { now: AT }),
+    /malformed header/,
+  );
+  assert.throws(
+    () => verifyShippoSignature(BODY, `t=${TIMESTAMP},t=${TIMESTAMP},${v1}`, SECRET, { now: AT }),
+    /malformed header/,
+  );
+  // The genuine single-parameter header still verifies.
+  assert.doesNotThrow(() => verifyShippoSignature(BODY, genuine, SECRET, { now: AT }));
+});
+
 test('an empty secret is refused rather than verifying everything', () => {
   assert.throws(() => verifyShippoSignature(BODY, sign(BODY, '', TIMESTAMP), '', { now: AT }), /secret/);
 });

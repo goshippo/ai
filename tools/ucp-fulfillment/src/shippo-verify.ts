@@ -54,7 +54,15 @@ export function verifyShippoSignature(
   const parts = new Map<string, string>();
   for (const piece of signatureHeader.split(',')) {
     const index = piece.indexOf('=');
-    if (index > 0) parts.set(piece.slice(0, index).trim(), piece.slice(index + 1).trim());
+    if (index <= 0) continue;
+    const key = piece.slice(0, index).trim();
+    // A repeated t or v1 is a malformed header, not a last-value-wins overwrite. Shippo sends each
+    // exactly once, and accepting a duplicate would let a sender append a second parameter that
+    // decides the outcome after the first one has been read.
+    if ((key === 't' || key === 'v1') && parts.has(key)) {
+      throw new ShippoSignatureError(`malformed header: duplicate ${key}`);
+    }
+    parts.set(key, piece.slice(index + 1).trim());
   }
   const timestamp = parts.get('t');
   const provided = parts.get('v1');

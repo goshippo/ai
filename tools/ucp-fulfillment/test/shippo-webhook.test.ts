@@ -6,6 +6,7 @@ import { buildTrackWebhookRequest, handleShippoTrackWebhook } from '../src/shipp
 import { appendFulfillmentEvent } from '../src/order-webhook.ts';
 import type { FetchLike } from '../src/order-webhook.ts';
 import {
+  InvalidOrderError,
   MalformedTrackError,
   ShippoApiVersionError,
   ShippoSignatureError,
@@ -246,6 +247,46 @@ test('an old Shippo API version is refused with an explanation', async () => {
   assert.deepEqual(fine, { handled: false, reason: 'no_order' });
 });
 
+test('an order line item with no quantity is a build_failed, never a raw TypeError', async () => {
+  // The same door Task 7 closed for fulfillment.events, one field over: assertLineItemsMatchOrder
+  // reads line.quantity.total, and an entry without one used to escape the whole taxonomy.
+  const broken = { ...order(), line_items: [{ id: 'li_shirt' }] } as unknown as Order;
+  const result = await buildTrackWebhookRequest(raw('track_updated.accepted.json'), {
+    ...base,
+    resolveOrder: () => ({ order: broken, lineItems: LINE_ITEMS, trackingUrl: 'https://x/y' }),
+  });
+  assert.equal(result.handled, false);
+  if (result.handled || result.reason !== 'build_failed') {
+    assert.fail(`expected build_failed, got ${JSON.stringify(result)}`);
+  }
+  assert.ok(result.error instanceof InvalidOrderError);
+  assert.equal(result.error.retryable, false);
+});
+
+test('the Shippo-API-Version floor is a date comparison, not a string compare', async () => {
+  // '2018-2-8' sorts above '2018-02-08' lexicographically, so the unpadded form used to slip past
+  // the floor. An unreadable version counts as below the floor rather than as good enough.
+  for (const version of ['2018-2-8', 'not-a-date', '2018-02-07', '2018-13-01']) {
+    await assert.rejects(
+      buildTrackWebhookRequest(raw('track_updated.accepted.json'), {
+        ...base,
+        headers: { 'shippo-api-version': version },
+        resolveOrder: () => undefined,
+      }),
+      (error: unknown) => error instanceof ShippoApiVersionError && error.version === version,
+      version,
+    );
+  }
+  for (const version of ['2018-02-08', '2025-01-01']) {
+    const fine = await buildTrackWebhookRequest(raw('track_updated.accepted.json'), {
+      ...base,
+      headers: { 'shippo-api-version': version },
+      resolveOrder: () => undefined,
+    });
+    assert.deepEqual(fine, { handled: false, reason: 'no_order' }, version);
+  }
+});
+
 test('an old Shippo API version only matters for a track_updated payload', async () => {
   const result = await buildTrackWebhookRequest(
     JSON.stringify({ event: 'transaction_created', test: false, data: {} }),
@@ -273,5 +314,5 @@ test('an omitted tracking URL surfaces as a warning on the result, never as sile
   if (!past.handled) return;
   assert.equal(past.event.tracking_url, undefined);
   assert.equal(past.warnings.length, 1);
-  assert.match(past.warnings[0], /tracking_url omitted for deutsche_post/);
+  assert.match(past.warnings[0], /^tracking_url_omitted: no tracking_url for deutsche_post/);
 });

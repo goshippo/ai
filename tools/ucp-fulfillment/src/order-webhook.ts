@@ -101,6 +101,35 @@ export function assertOrderShape(order: unknown): asserts order is Order {
       problems.push('fulfillment.events must be an array');
     }
   }
+  // Same door, one field over. assertLineItemsMatchOrder reads line.quantity.total and
+  // appendFulfillmentEvent reads quantity.fulfilled and quantity.total, so an entry without a
+  // quantity object throws a raw TypeError that escapes both this taxonomy and the build_failed
+  // classification, and a route following the README's error block then answers 5xx and Shippo
+  // redelivers the same payload forever. `original` is optional in the schema and is only checked
+  // when present, since appendFulfillmentEvent copies it through rather than reading it.
+  if (Array.isArray(candidate.line_items)) {
+    candidate.line_items.forEach((entry, index) => {
+      const at = `line_items[${index}]`;
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        problems.push(`${at} must be an object`);
+        return;
+      }
+      const line = entry as Record<string, unknown>;
+      if (typeof line.id !== 'string' || line.id === '') problems.push(`${at}.id must be a non-empty string`);
+      const quantity = line.quantity;
+      if (!quantity || typeof quantity !== 'object' || Array.isArray(quantity)) {
+        problems.push(`${at}.quantity must be an object with integer total and fulfilled`);
+        return;
+      }
+      const counts = quantity as Record<string, unknown>;
+      for (const field of ['total', 'fulfilled'] as const) {
+        if (!Number.isInteger(counts[field])) problems.push(`${at}.quantity.${field} must be an integer`);
+      }
+      if (counts.original !== undefined && !Number.isInteger(counts.original)) {
+        problems.push(`${at}.quantity.original must be an integer when present`);
+      }
+    });
+  }
   if (problems.length) throw new InvalidOrderError(problems);
 }
 
@@ -148,7 +177,14 @@ export function classifyEvent(order: Order, event: FulfillmentEvent): 'new' | 'd
   const terminalTimes = events
     .filter((existing) => TERMINAL_TYPES.has(existing.type))
     .map((existing) => Date.parse(existing.occurred_at));
-  if (terminalTimes.length && Date.parse(event.occurred_at) <= Math.max(...terminalTimes)) return 'stale';
+  if (!terminalTimes.length) return 'new';
+  // A stored terminal event whose occurred_at does not parse counts as terminal at infinity rather
+  // than dropping out of the comparison: Date.parse returns NaN, every comparison against it is
+  // false, and the stale guard would switch itself off precisely on the order whose log is already
+  // suspect. Fail closed. The terminal event supersedes a non-terminal one whatever its clock says,
+  // and a later terminal event is still admitted by the check above.
+  if (terminalTimes.some((time) => Number.isNaN(time))) return 'stale';
+  if (Date.parse(event.occurred_at) <= Math.max(...terminalTimes)) return 'stale';
   return 'new';
 }
 
@@ -254,20 +290,46 @@ function assertBusinessProfileUrl(value: string): string {
   } catch {
     throw new InvalidOrderError([`businessProfileUrl is not a URL: ${value}`]);
   }
+  // The host check is the last two clauses. A quote or a backslash survives WHATWG parsing into
+  // `href`, and the UCP-Agent value is an RFC 8941 quoted string, so such a host emits
+  // profile="https://ho"st.example/..." which the Platform's signature canonicalization reads
+  // differently from the sender's.
   if (
     url.protocol !== 'https:' ||
     url.pathname !== '/.well-known/ucp' ||
     url.username !== '' ||
     url.password !== '' ||
     url.search !== '' ||
-    url.hash !== ''
+    url.hash !== '' ||
+    url.host.includes('"') ||
+    url.host.includes('\\')
   ) {
     throw new InvalidOrderError([
       'businessProfileUrl must be an https URL whose path is exactly /.well-known/ucp, with no ' +
-        `userinfo, query string or fragment, got ${value}`,
+        `userinfo, query string, fragment, quote or backslash, got ${value}`,
     ]);
   }
   return url.href;
+}
+
+/**
+ * The Platform's webhook_url has to be a URL this library can POST to, and it is the URL that
+ * actually receives the buyer's address, so it is checked rather than left to fail at fetch time.
+ * http is allowed as well as https, unlike businessProfileUrl: a merchant's first run of this flow
+ * is against a local receiver, and UCP's https requirement binds the Platform that publishes the
+ * value rather than this library. The caller's exact string is what gets sent; only its shape is
+ * checked here.
+ */
+function assertWebhookUrl(value: string): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new InvalidOrderError([`webhookUrl is not a URL: ${value}`]);
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new InvalidOrderError([`webhookUrl must be an http or https URL, got ${value}`]);
+  }
 }
 
 /**
@@ -282,6 +344,7 @@ function assertBusinessProfileUrl(value: string): string {
  */
 export function buildOrderEventRequest(opts: BuildOrderEventRequestOptions): OrderEventRequest {
   assertOrderShape(opts.order);
+  assertWebhookUrl(opts.webhookUrl);
   const businessProfileUrl = assertBusinessProfileUrl(opts.businessProfileUrl);
   const occurredAt = Date.parse(opts.event.occurred_at);
   if (Number.isNaN(occurredAt)) {
