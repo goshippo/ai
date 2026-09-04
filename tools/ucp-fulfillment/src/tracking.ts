@@ -507,14 +507,17 @@ export function buildProcessingEvent(
     type: 'processing',
     line_items: copyLineItems(opts.lineItems),
   };
-  if (trackingNumber) {
-    const trackingUrl = resolveTrackingUrl(
-      { carrier: opts.carrier, trackingNumber },
-      { ...opts, transaction: opts.transaction ?? transaction },
-    );
-    event.tracking_number = trackingNumber;
-    if (trackingUrl) event.tracking_url = trackingUrl;
-  }
+  // Resolved regardless of whether this transaction has a tracking number: an explicit
+  // opts.trackingUrl or a transaction's own tracking_url_provider is not derived from the
+  // tracking number, so it must not be discarded just because this transaction has none. The
+  // other three candidates (template, Shippo tracking page, built-in table) still need a number,
+  // and resolveTrackingUrl already treats a blank one as contributing nothing at those positions.
+  const trackingUrl = resolveTrackingUrl(
+    { carrier: opts.carrier, trackingNumber: trackingNumber ?? '' },
+    { ...opts, transaction: opts.transaction ?? transaction },
+  );
+  if (trackingNumber) event.tracking_number = trackingNumber;
+  if (trackingUrl) event.tracking_url = trackingUrl;
   event.carrier = carrierDisplayName(opts.carrier, opts.carrierDisplayNames);
   return event;
 }

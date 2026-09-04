@@ -600,4 +600,12 @@ test('a transaction with no tracking number still yields a valid processing even
   );
   assert.equal(explicit.id, 'evt_p');
   assert.equal(explicit.tracking_url, 'https://tools.usps.com/go/TrackConfirmAction?tLabels=9400');
+  // An explicit trackingUrl is not derived from the tracking number, so it must still resolve even
+  // when the transaction has no tracking number of its own to offer.
+  const noNumberExplicitUrl = buildProcessingEvent(
+    { objectId: 'txn_3', objectCreated: '2026-09-03T16:00:00Z' },
+    { lineItems: LINE_ITEMS, carrier: 'usps', trackingUrl: 'https://merchant.example/t/1' },
+  );
+  assert.equal(noNumberExplicitUrl.tracking_url, 'https://merchant.example/t/1');
+  assert.equal(noNumberExplicitUrl.tracking_number, undefined);
 });
