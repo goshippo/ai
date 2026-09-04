@@ -30,4 +30,9 @@ jobs:
       - name: Built entry exports the full public surface
         run: node -e "import('./dist/index.js').then((m) => { const n = Object.keys(m).length; if (n < 70) { console.error('expected at least 70 exports, got', n); process.exit(1); } console.log(n, 'exports'); })"
       - name: Core entry loads no third-party modules
-        run: node --experimental-loader=./scripts/count-deps.mjs -e "await import('./dist/core.js');"
+        # --input-type=module is required: `node -e` input is CommonJS unless the module syntax is
+        # detected, and that detection is a version-gated default rather than a guarantee, so the
+        # top-level await below would be a SyntaxError wherever it is off. The assertion itself is
+        # unchanged; the loader hook in scripts/count-deps.mjs fails the process on any resolution
+        # under node_modules.
+        run: node --experimental-loader=./scripts/count-deps.mjs --input-type=module -e "await import('./dist/core.js');"
