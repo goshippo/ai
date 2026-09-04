@@ -159,7 +159,13 @@ export function normalizeRate(raw: unknown): ShippoRateInput {
 }
 
 function slug(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  // Split on runs of non-alphanumerics and drop the empty edges: linear time, unlike a trailing
+  // `_+$` trim, which backtracks quadratically on long runs of underscores.
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((part) => part.length > 0)
+    .join('_');
 }
 
 /**
