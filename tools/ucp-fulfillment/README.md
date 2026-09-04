@@ -4,7 +4,7 @@ Map Shippo rates and tracking onto the [Universal Commerce Protocol](https://ucp
 
 Status: Phase 1 spike (AI-469). Pre-1.0, so the API can change. Pinned to UCP `2026-08-25`.
 
-Requires Node 20.19 or later. Talks to the Shippo API at version `2018-02-08` or later; on older versions Shippo's `track_updated` webhook carries a Transaction rather than a Track and this library refuses it with a clear error.
+Requires Node 20.19 or later. Talks to the Shippo API at version `2018-02-08` or later; on older versions Shippo's `track_updated` webhook carries a Transaction rather than a Track. Pass the inbound request `headers` to the webhook builder and the library refuses such a payload with `ShippoApiVersionError`. That check runs ONLY when `headers` is passed, as the worker example below does; without them an old-version payload degrades to a `build_failed` skip instead of the clear error.
 
 ## Install and import
 
@@ -128,14 +128,22 @@ import express from 'express';
 import { handleShippoTrackWebhook } from '@shippo/ucp-fulfillment/core';
 
 app.post('/webhooks/shippo', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    await queue.publish({ body: req.body.toString('utf8'), headers: req.headers });
+  } catch (error) {
+    log.error(error);
+    return res.sendStatus(500);                          // Shippo retries a 5xx; it never retries a 202
+  }
   res.sendStatus(202);                                   // ack inside Shippo's three second budget
-  await queue.publish({ body: req.body.toString('utf8'), headers: req.headers });
 });
 
 // worker
+const secret = process.env.SHIPPO_WEBHOOK_SECRET;
+if (!secret) throw new Error('SHIPPO_WEBHOOK_SECRET is required');
+
 const result = await handleShippoTrackWebhook(job.body, {
-  trust: { mode: 'hmac', secret: process.env.SHIPPO_WEBHOOK_SECRET, signatureHeader: job.headers['shippo-auth-signature'] },
-  headers: job.headers,
+  trust: { mode: 'hmac', secret, signatureHeader: job.headers['shippo-auth-signature'] },
+  headers: job.headers,                                  // the API-version check runs only with these
   resolveOrder: async (track) => {
     const row = await store.findShipment({
       transactionId: track.transaction,                   // preferred join key
@@ -191,7 +199,7 @@ Wiring notes that are easy to get wrong:
 
 1. **Delivery window.** Ship on the first business day on or after now; `earliest_fulfillment_time` is that plus `estimated_days` in CALENDAR days by default, because Shippo documents `estimated_days` only as a carrier average and USPS, UPS and FedEx all deliver at weekends. `transitDayBasis: 'business'` opts into the conservative reading. The latest bound adds a buffer in the same basis: 0 when `arrives_by` is present or the estimate is one day or less, 2 otherwise, and `bufferBusinessDays` takes a number or a function of the rate. The earliest bound is clamped so it is never in the past, and `destinationUtcOffsetMinutes` shifts day boundaries into the buyer's day. UCP does not say whether these fields mean handoff or arrival; this library reads them as the buyer's ARRIVAL window, which matches how options are rendered. `arrives_by` is a local time of day with no zone, so it appears only in the description.
 2. **Status map.** `PRE_TRANSIT` and `UNKNOWN` are `processing`; `TRANSIT` with `package_accepted` is `shipped`; `TRANSIT` with any of the nine stalled or action-required substatuses, or with `action_required: true`, is `failed_attempt`; other `TRANSIT` is `in_transit`; `DELIVERED` is `delivered`; `RETURNED` with `package_unclaimed` is `failed_attempt` and other `RETURNED` is `returned_to_sender`; `FAILURE` is `undeliverable`. Anything outside those six statuses throws `UnmappedTrackingStatusError` instead of guessing. `returned_to_sender` means the carrier has BEGUN returning the parcel, not that it is back in your warehouse; physical receipt is your own event to record. Events are stored in `occurred_at` order, and a non-terminal event older than a recorded terminal one is dropped and reported as `stale_event`.
-3. **Tracking URL.** Precedence: explicit option, then the transaction's `tracking_url_provider`, then a `trackingUrlTemplates` entry, then your Shippo tracking page (`shippoTrackingUserId`), then the built-in table for USPS, UPS, FedEx and DHL Express. UCP requires `tracking_url` past `processing` in the field DESCRIPTION only; there is no `if`/`then` in `fulfillment_event.json`, so schema validation will not catch a missing URL. The library therefore omits the field and names the omission in `warnings`, and throws only when you pass `requireTrackingUrl: true`. The built-in table is a dated fallback; `scripts/check-tracking-urls.ts` re-checks it by hand.
+3. **Tracking URL.** Precedence: explicit option, then the transaction's `tracking_url_provider`, then a `trackingUrlTemplates` entry, then your Shippo tracking page (`shippoTrackingUserId`), then the built-in table for USPS, UPS, FedEx and DHL Express. UCP requires `tracking_url` past `processing` in the field DESCRIPTION only; there is no `if`/`then` in `fulfillment_event.json`, so schema validation will not catch a missing URL. The library therefore omits the field and names the omission in `warnings`, and throws only when you pass `requireTrackingUrl: true`. Both tracking warnings lead with a stable code, `tracking_url_omitted:` and `tracking_number_missing:`, so you switch on the prefix and log the sentence, exactly as with `SHIPMENT_WARNINGS`. The built-in table is a dated fallback; `scripts/check-tracking-urls.ts` re-checks it by hand.
 4. **Line items.** You supply `{ id, quantity }` pairs; Shippo does not know them. `quantity` counts STEPS of the order line's `item.quantity_unit`, which is whole items only when that unit is absent: for a line sold by weight at scale 2, `quantity: 250` means 2.50 units. References are reconciled against the order and a mismatch throws. Because `appendFulfillmentEvent` derives each line's `quantity.fulfilled` as the maximum across fulfilling events rather than a sum, so that one parcel's shipped, in_transit and delivered sequence counts once, a line genuinely split across two parcels settles at the larger parcel's quantity and stays `partial`; pass `fulfilledResolver` to substitute your own cumulative count when you split a line across parcels.
 5. **Option identity.** `fulfillment_option.id` is `servicelevel.extended_token ?? token ?? slug(provider)`, never `rate.object_id`, because UCP references options by id across checkout updates and from catalog into checkout while a rate object id is minted per shipment and expires in seven days. Options are deduplicated by option id keeping the cheapest, so two carrier accounts on one service produce one option. `rateIdsByOptionId` and `matchSelectedOption` map an id back to the rate to purchase. `isRateExpired(rate)` and `RATE_MAX_AGE_MS` are the check for that seven day window, which a checkout left open longer than a Shippo rate lives will otherwise hit only at purchase.
 6. **Pricing.** Options are priced at the Shippo rate with NO MARKUP. `amountSource` defaults to `'auto'`: the `(amount, currency)` or `(amount_local, currency_local)` pair whose currency matches the checkout, preferring `amount` when both match, and `CurrencyMismatchError` when neither does. This library never converts currency; `ratesInCurrency` re-requests rates from Shippo instead. `adjustAmount(rate, minorUnits)` is the hook if you mark shipping up.
@@ -231,11 +239,19 @@ UCP makes retry a Business obligation, and this library deliberately does not re
 - use `keyid` equal to the RFC 7638 JWK thumbprint of your signing key;
 - emit ECDSA signatures as raw `r || s`, not DER.
 
-The library never fakes a signature and never lets a signer replace `Content-Digest` or `Content-Type`: the digest must cover the exact body being sent.
+The library never fakes a signature, and it builds five headers itself: `Content-Type`, `Content-Digest`, `Webhook-Id`, `Webhook-Timestamp` and `UCP-Agent`. A signer may add ONLY `Signature` and `Signature-Input`. Returning any of those five raises `SignerConflictError`, matched case-insensitively and whatever the value, because the digest must cover the exact body and headers being sent and because HTTP header names are case-insensitive on the wire: undici merges a differently-cased duplicate into the same outgoing header rather than rejecting it, so a lowercase `content-digest` from a signer would otherwise slip past a name-exact check.
 
 ## Data handling
 
-Every order event posts the FULL order snapshot, which the UCP order capability requires ("MUST send full order entity on updates"). That means each event transmits `fulfillment.expectations[].destination`, a complete postal address, and `line_items`, which reveal what was purchased. Two mitigations are built in: duplicate suppression and the stale-event guard together cut the post count to one per genuine status change, rather than one per carrier scan. UCP tells Platforms to treat order data as ephemeral; that is a contract, not an enforcement, so send only the lines a Platform needs and consider trimming expectations you do not need it to render.
+Every order event posts the FULL order snapshot, which the UCP order capability requires ("MUST send full order entity on updates"). That means each event transmits `fulfillment.expectations[].destination`, a complete postal address, and `line_items`, which reveal what was purchased.
+
+Two guards are built in, and neither of them reduces the number of scans you post. Duplicate suppression collapses REDELIVERIES of the same carrier scan, since each Shippo `track_updated` carries its own `tracking_status.object_id` and each distinct scan therefore gets its own event id. The stale guard drops a non-terminal event that arrives after a terminal one. Every accepted scan still posts a full order snapshot including the buyer's address, so three successive in-transit scans are three posts. UCP tells Platforms to treat order data as ephemeral; that is a contract, not an enforcement, so send only the lines a Platform needs and consider trimming expectations you do not need it to render.
+
+## Export notes
+
+Most builders come in a pair, and the `Result` form is the reporting one: `buildFulfillmentOption` / `buildFulfillmentOptionsResult`, `buildShipmentRequest` / `buildShipmentRequestResult`, `buildFulfillmentEvent` / `buildFulfillmentEventResult`, `buildFulfillmentEvents` / `buildFulfillmentEventsResult`. The bare form throws on the first thing it cannot map; the `Result` form returns what it built alongside the judgment calls it made, which is why the webhook path uses it and why nothing is dropped in silence. `buildFulfillmentEventsResult` deduplicates warnings across a whole tracking history, so a carrier with no resolvable tracking URL reports the omission once rather than once per scan.
+
+`buildShippingFulfillment` is the one exception to that naming. It returns `{ methods, skipped }`, which is Result-shaped, without the `Result` suffix, and it has no bare counterpart. Renaming it is not worth the churn before 1.0, so the exception is recorded here rather than fixed.
 
 ## Two notes on scope
 

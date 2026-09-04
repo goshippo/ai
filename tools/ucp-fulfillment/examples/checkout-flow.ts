@@ -14,8 +14,8 @@ import {
   buildProcessingEvent,
   buildShipmentRequestResult,
   buildShippingFulfillment,
-  buildTrackWebhookRequest,
   catalogShippingMethod,
+  handleShippoTrackWebhook,
   matchSelectedOption,
   normalizeRate,
   orderResponseUcp,
@@ -23,7 +23,7 @@ import {
   ucpCapabilities,
   type FetchLike,
   type Order,
-} from '../src/index.ts';
+} from '../src/index.js';
 import { validateUcp, SCHEMA_IDS } from '../test/helpers/ucp-validator.ts';
 
 const NOW = new Date('2026-09-03T15:00:00Z');
@@ -133,14 +133,16 @@ const placed = appendFulfillmentEvent({ ...order, fulfillment: { expectations: [
 validateUcp(SCHEMA_IDS.order, placed);
 show(placed);
 
-banner('4b. Tracking: a Shippo track_updated webhook becomes a signed order event request');
-const posted: Array<{ url: string; headers: Record<string, string> }> = [];
+banner('4b. Tracking: a Shippo track_updated webhook becomes an order event POST');
+// The platform is a recording double rather than the network, and allowUnsigned is what makes that
+// legal. It is for a local receiver only: in production you pass a `sign` hook, and sendOrderEvent
+// refuses to transmit without one.
+const posted: Array<{ method: string; url: string; headers: Record<string, string> }> = [];
 const recordingFetch: FetchLike = async (url, init) => {
-  posted.push({ url, headers: init.headers });
+  posted.push({ method: init.method, url, headers: init.headers });
   return { ok: true, status: 200, text: async () => '' };
 };
-void recordingFetch;
-const plan = await buildTrackWebhookRequest(
+const plan = await handleShippoTrackWebhook(
   readFileSync(new URL('../test/fixtures/track_updated.accepted.json', import.meta.url), 'utf8'),
   {
     trust: { mode: 'caller_verified', attestation: 'I verified this request came from Shippo' },
@@ -152,11 +154,16 @@ const plan = await buildTrackWebhookRequest(
     }),
     webhookUrl: WEBHOOK_URL,
     businessProfileUrl: PROFILE,
+    allowUnsigned: true,
+    fetch: recordingFetch,
   },
 );
 if (!plan.handled) throw new Error(`the example webhook was not handled: ${plan.reason}`);
 validateUcp(SCHEMA_IDS.strictFulfillmentEvent, plan.event);
 validateUcp(SCHEMA_IDS.order, JSON.parse(plan.request.body));
 show({ event: plan.event, warnings: plan.warnings, headers: plan.request.headers });
+for (const sent of posted) {
+  console.log(`posted: ${sent.method} ${sent.url} [${Object.keys(sent.headers).join(', ')}] -> ${plan.status}`);
+}
 
 console.log('\nEvery payload above validated against the vendored UCP 2026-08-25 schemas.');
