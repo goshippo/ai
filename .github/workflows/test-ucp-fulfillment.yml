@@ -1,0 +1,38 @@
+name: Test @shippo/ucp-fulfillment
+on:
+  pull_request:
+    paths:
+      - 'tools/ucp-fulfillment/**'
+      - '.github/workflows/test-ucp-fulfillment.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['20.19', '22']
+    defaults:
+      run:
+        working-directory: tools/ucp-fulfillment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Generated types are in step with the schemas
+        run: npm run gen:types && git diff --exit-code src/generated/ucp.ts
+      - run: npm run build
+      - run: npm run example
+      - name: Built entry exports the full public surface
+        run: node -e "import('./dist/index.js').then((m) => { const n = Object.keys(m).length; if (n < 70) { console.error('expected at least 70 exports, got', n); process.exit(1); } console.log(n, 'exports'); })"
+      - name: Core entry loads no third-party modules
+        # --input-type=module is required: `node -e` input is CommonJS unless the module syntax is
+        # detected, and that detection is a version-gated default rather than a guarantee, so the
+        # top-level await below would be a SyntaxError wherever it is off. The assertion itself is
+        # unchanged; the loader hook in scripts/count-deps.mjs fails the process on any resolution
+        # under node_modules.
+        run: node --experimental-loader=./scripts/count-deps.mjs --input-type=module -e "await import('./dist/core.js');"

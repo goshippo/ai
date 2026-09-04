@@ -1,0 +1,20 @@
+{
+  "event": "track_updated",
+  "test": true,
+  "data": {
+    "carrier": "ups",
+    "messages": [],
+    "tracking_history": [],
+    "tracking_number": "1Z999AA10123456784",
+    "tracking_status": {
+      "object_created": "2026-09-03T16:00:00Z",
+      "object_id": "ts_accepted_1",
+      "object_updated": "2026-09-03T16:00:00Z",
+      "status": "TRANSIT",
+      "substatus": { "code": "package_accepted", "text": "Package has been accepted into the carrier network for delivery.", "action_required": false },
+      "status_date": "2026-09-03T15:42:10Z",
+      "status_details": "Origin Scan"
+    },
+    "transaction": "txn_ups_1"
+  }
+}

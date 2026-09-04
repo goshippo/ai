@@ -1,0 +1,1 @@
+JSON schemas copied verbatim from https://github.com/universal-commerce-protocol/ucp at tag v2026-08-25 (source/schemas). Licensed under the Apache License 2.0; see LICENSE in this directory. Used here to generate TypeScript types and to validate produced objects in tests.

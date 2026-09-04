@@ -1,0 +1,19 @@
+{
+  "object_created": "2026-09-03T15:00:00.000Z",
+  "object_id": "rate_ups_next_day",
+  "object_owner": "merchant@example.com",
+  "shipment": "shp_1",
+  "attributes": ["FASTEST"],
+  "amount": "42.10",
+  "currency": "USD",
+  "amount_local": "42.10",
+  "currency_local": "USD",
+  "provider": "UPS",
+  "servicelevel": { "name": "Next Day Air", "token": "ups_next_day_air", "terms": "" },
+  "estimated_days": 1,
+  "arrives_by": "10:30:00",
+  "duration_terms": "Next business day delivery by 10:30 a.m.",
+  "messages": [],
+  "carrier_account": "ca_ups",
+  "test": true
+}

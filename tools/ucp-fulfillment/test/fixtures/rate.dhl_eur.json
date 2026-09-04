@@ -1,0 +1,19 @@
+{
+  "object_created": "2026-09-03T15:00:00.000Z",
+  "object_id": "rate_dhl_eur",
+  "object_owner": "merchant@example.com",
+  "shipment": "shp_2",
+  "attributes": ["CHEAPEST"],
+  "amount": "12.90",
+  "currency": "EUR",
+  "amount_local": "12.90",
+  "currency_local": "EUR",
+  "provider": "DHL Express",
+  "servicelevel": { "name": "Express Worldwide", "token": "dhl_express_worldwide", "terms": "" },
+  "estimated_days": null,
+  "duration_terms": null,
+  "arrives_by": null,
+  "messages": [],
+  "carrier_account": "ca_dhl",
+  "test": true
+}

@@ -1,0 +1,19 @@
+{
+  "object_created": "2026-09-03T15:00:00.000Z",
+  "object_id": "rate_usps_priority",
+  "object_owner": "merchant@example.com",
+  "shipment": "shp_1",
+  "attributes": ["BESTVALUE"],
+  "amount": "8.35",
+  "currency": "USD",
+  "amount_local": "8.35",
+  "currency_local": "USD",
+  "provider": "USPS",
+  "servicelevel": { "name": "Priority Mail", "token": "usps_priority", "terms": "" },
+  "estimated_days": 2,
+  "duration_terms": "Delivery within 1, 2, or 3 days based on where your package started and where it's being sent.",
+  "messages": [],
+  "carrier_account": "ca_usps",
+  "test": true,
+  "zone": "1"
+}

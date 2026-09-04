@@ -1,0 +1,31 @@
+{
+  "ucp": {
+    "version": "2026-08-25",
+    "capabilities": {
+      "dev.ucp.shopping.order": [{ "version": "2026-08-25" }],
+      "dev.ucp.shopping.fulfillment": [{ "version": "2026-08-25" }]
+    }
+  },
+  "id": "order_123",
+  "checkout_id": "chk_123",
+  "permalink_url": "https://merchant.example/orders/order_123",
+  "line_items": [
+    {
+      "id": "li_shirt",
+      "item": { "id": "sku_shirt", "title": "Shirt", "price": 2000 },
+      "quantity": { "original": 2, "total": 2, "fulfilled": 0 },
+      "totals": [
+        { "type": "subtotal", "amount": 4000 },
+        { "type": "total", "amount": 4000 }
+      ],
+      "status": "processing"
+    }
+  ],
+  "fulfillment": { "expectations": [], "events": [] },
+  "currency": "USD",
+  "totals": [
+    { "type": "subtotal", "amount": 4000 },
+    { "type": "fulfillment", "amount": 835 },
+    { "type": "total", "amount": 4835 }
+  ]
+}

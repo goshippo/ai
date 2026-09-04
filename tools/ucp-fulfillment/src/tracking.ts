@@ -1,0 +1,586 @@
+import { createHash } from 'node:crypto';
+import type { Expectation, FulfillmentEvent, FulfillmentOption, PostalAddress } from './generated/index.js';
+import {
+  LineItemsRequiredError,
+  MalformedTrackError,
+  MissingTrackingStatusError,
+  TrackingUrlUnresolvedError,
+  UnmappedTrackingStatusError,
+} from './errors.js';
+import {
+  carrierDisplayName,
+  carrierTrackingUrl,
+  templateTrackingUrl,
+  shippoTrackingPageUrl,
+  type TrackingUrlTemplates,
+} from './carriers.js';
+import type { ShippingDestinationLike } from './shipment.js';
+
+/**
+ * The fulfillment_event types this library emits, as a runtime array so a test can enumerate
+ * them and the strict overlay can pin them. UCP's own vocabulary is OPEN: fulfillment_event.type
+ * is a bare string whose common values live in a description, and the order spec says a business
+ * may use any value that makes sense. BuildEventOptions.type is how a merchant does that.
+ *
+ * Keep in sync with FULFILLMENT_EVENT_TYPE_VALUES in test/helpers/ucp-validator.ts, which is the
+ * enum the STRICT_FULFILLMENT_EVENT overlay validates against.
+ */
+export const FULFILLMENT_EVENT_TYPES = [
+  'processing',
+  'shipped',
+  'in_transit',
+  'delivered',
+  'failed_attempt',
+  'canceled',
+  'undeliverable',
+  'returned_to_sender',
+] as const;
+
+export type FulfillmentEventType = (typeof FULFILLMENT_EVENT_TYPES)[number];
+
+export interface ShippoSubstatusInput {
+  code?: string | undefined;
+  text?: string | undefined;
+  actionRequired?: boolean | undefined;
+}
+
+export interface ShippoTrackingStatusInput {
+  objectId?: string | undefined;
+  status: string;
+  substatus?: ShippoSubstatusInput | null | undefined;
+  statusDate?: Date | string | null | undefined;
+  statusDetails?: string | undefined;
+  objectCreated?: Date | string | undefined;
+}
+
+/**
+ * The subset of a Shippo Track the mapping reads. Declared structurally, so this module stays
+ * dependency free and so a raw webhook body can be normalized into it without the SDK parser,
+ * which rejects the nulls and naive timestamps Shippo's own documented payloads contain.
+ */
+export interface ShippoTrackInput {
+  trackingNumber: string;
+  /** Shippo carrier token, lowercase, for example "usps". */
+  carrier: string;
+  /**
+   * The object id of the Shippo Transaction that bought the label, when the label was bought on
+   * Shippo. This is the join key a merchant should key resolveOrder on: it is unique across
+   * carriers, while a tracking number is unique only per carrier and carriers do reuse them.
+   */
+  transaction?: string | undefined;
+  trackingStatus?: ShippoTrackingStatusInput | null | undefined;
+  /** Full history, oldest first, as Shippo returns it. */
+  trackingHistory?: ShippoTrackingStatusInput[] | undefined;
+  /**
+   * Indexes into the ORIGINAL tracking_history array (as Shippo sent it, before any entries were
+   * dropped) that normalizeTrack could not read, most commonly a history entry with no status.
+   * Present only when non-empty, so an ordinary payload leaves this field entirely absent.
+   */
+  droppedHistoryIndexes?: number[] | undefined;
+}
+
+/** The subset of a Shippo Transaction the post-purchase event reads. */
+export interface ShippoTransactionInput {
+  objectId?: string | undefined;
+  trackingNumber?: string | undefined;
+  trackingUrlProvider?: string | undefined;
+  objectCreated?: Date | string | undefined;
+}
+
+export interface LineItemRef {
+  id: string;
+  /**
+   * Integer count of STEPS of the order line's item.quantity_unit, per the UCP fulfillment_event
+   * schema. When quantity_unit is absent this is a whole-item count. For a line sold by weight at
+   * scale 2, quantity 250 means 2.50 units, not 250 items.
+   */
+  quantity: number;
+}
+
+export interface ResolveTrackingUrlOptions {
+  /** An explicit URL. Outranks everything. */
+  trackingUrl?: string | undefined;
+  /** The purchasing Shippo transaction, whose tracking_url_provider is Shippo's own answer. */
+  transaction?: ShippoTransactionInput | null | undefined;
+  /** Merchant patterns keyed by carrier token, with a {tracking_number} placeholder. */
+  trackingUrlTemplates?: TrackingUrlTemplates | undefined;
+  /** The merchant's Shippo user id, which turns the Shippo tracking page into a universal answer. */
+  shippoTrackingUserId?: string | undefined;
+}
+
+export interface BuildEventOptions extends ResolveTrackingUrlOptions {
+  /** Which order line items this shipment fulfills. Shippo does not know them; the merchant does. */
+  lineItems: LineItemRef[];
+  /** Event id. Default `${tracking_number}:${tracking_status.object_id}`, or a derived hash. */
+  id?: string;
+  /** Override the mapped type. UCP's type vocabulary is open. */
+  type?: string;
+  /** Carrier display-name overrides, keyed by carrier token. */
+  carrierDisplayNames?: Readonly<Record<string, string>>;
+  /**
+   * Throw TrackingUrlUnresolvedError when an event past `processing` has no tracking URL or no
+   * tracking number. Default false: UCP puts that requirement in a field description rather than
+   * in the schema, and a throw inside a webhook handler turns one unmapped carrier into a
+   * permanently looping endpoint. The omission is always reported in `warnings`.
+   */
+  requireTrackingUrl?: boolean;
+}
+
+export interface BuildExpectationOptions {
+  id: string;
+  lineItems: LineItemRef[];
+  /** A UCP shipping destination or bare postal address. Any id and type are stripped. */
+  destination: ShippingDestinationLike;
+  /** Well-known values: shipping, pickup, digital. Default "shipping". */
+  methodType?: string;
+  /** Buyer-facing timing text. Defaults to the selected option's description. */
+  description?: string;
+  /**
+   * The option the buyer chose, used for the default description. Typed as Pick plus an index
+   * signature, not a bare Pick: a real FulfillmentOption (id, title, totals and more) is what a
+   * caller actually has in hand, and Pick's stripped index signature would otherwise reject that
+   * literal for carrying properties beyond the one this function reads.
+   */
+  option?: Pick<FulfillmentOption, 'description'> & Record<string, unknown>;
+  /** "now", or an ISO 8601 timestamp for a backorder or preorder. */
+  fulfillableOn?: string;
+}
+
+export interface BuildProcessingEventOptions extends ResolveTrackingUrlOptions {
+  lineItems: LineItemRef[];
+  /** Shippo carrier token for the purchased rate, for example "ups". */
+  carrier: string;
+  id?: string;
+  occurredAt?: Date;
+  carrierDisplayNames?: Readonly<Record<string, string>>;
+}
+
+/**
+ * TRANSIT substatuses that mean a delivery attempt failed or the parcel is stalled pending
+ * action. Eight are flagged action_required in Shippo's own substatus table; package_held is
+ * added because the parcel is stopped at a carrier location until someone contacts the carrier,
+ * which a buyer needs to see and which "in transit" hides.
+ */
+const TRANSIT_NEEDS_ACTION = new Set([
+  'address_issue',
+  'contact_carrier',
+  'delivery_attempted',
+  'location_inaccessible',
+  'notice_left',
+  'package_damaged',
+  'package_held',
+  'pickup_available',
+  'reschedule_delivery',
+]);
+
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * `requireStatus` is true for the live tracking_status (the default) and false for a
+ * tracking_history entry: the live status is load-bearing for the whole payload, so its absence
+ * throws, while a history entry is one of potentially many and is dropped by the caller instead
+ * (see normalizeTrack) rather than failing an otherwise-good payload over one bad scan.
+ */
+function normalizeStatus(raw: unknown, requireStatus = true): ShippoTrackingStatusInput | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const source = raw as Record<string, unknown>;
+  // status is required on Shippo's TrackingStatus, in the OpenAPI contract and in the SDK type. If
+  // it is absent the payload is not one this library can read, and inventing UNKNOWN here would
+  // post a fabricated "processing" event onto a real order while putting the guess one layer below
+  // mapTrackingStatus, where UnmappedTrackingStatusError can no longer see it.
+  const status = text(source['status']);
+  if (!status) {
+    if (requireStatus) throw new MalformedTrackError('tracking_status.status');
+    return undefined;
+  }
+  const result: ShippoTrackingStatusInput = { status };
+  const objectId = text(source['object_id']) ?? text(source['objectId']);
+  const statusDate = text(source['status_date']) ?? text(source['statusDate']);
+  const statusDetails = text(source['status_details']) ?? text(source['statusDetails']);
+  const objectCreated = text(source['object_created']) ?? text(source['objectCreated']);
+  if (objectId !== undefined) result.objectId = objectId;
+  if (statusDate !== undefined) result.statusDate = statusDate;
+  if (statusDetails !== undefined) result.statusDetails = statusDetails;
+  if (objectCreated !== undefined) result.objectCreated = objectCreated;
+  const rawSub = source['substatus'];
+  if (rawSub && typeof rawSub === 'object') {
+    const sub = rawSub as Record<string, unknown>;
+    const substatus: ShippoSubstatusInput = {};
+    const code = text(sub['code']);
+    const subText = text(sub['text']);
+    const actionRequired = sub['action_required'] ?? sub['actionRequired'];
+    if (code !== undefined) substatus.code = code;
+    if (subText !== undefined) substatus.text = subText;
+    if (typeof actionRequired === 'boolean') substatus.actionRequired = actionRequired;
+    result.substatus = substatus;
+  }
+  return result;
+}
+
+/**
+ * Read a raw Shippo track body (snake_case, straight from a webhook or GET /tracks/) into
+ * ShippoTrackInput.
+ *
+ * Deliberately tolerant, and deliberately not the SDK's inbound parser. Shippo sends JSON null
+ * for optional fields, sends naive timestamps in test mode, and can add a status value without an
+ * API version bump; the SDK schema treats all three as hard failures, which would turn Shippo's
+ * own documented test flow into a permanently retrying 500. The hard requirements are carrier,
+ * tracking_number and, when the LIVE tracking_status is present, its status: nothing downstream
+ * can proceed without the first two, and a status is required on Shippo's own TrackingStatus, so
+ * inventing one would post a fabricated event rather than report an unreadable payload.
+ *
+ * tracking_history is held to a looser standard. A history entry this function cannot read (most
+ * commonly one with no status) is DROPPED rather than failing the whole payload: one bad scan
+ * buried in a long history should not make an otherwise-good live tracking_status unreadable. Its
+ * original index, into the array as Shippo sent it, is recorded in droppedHistoryIndexes.
+ */
+export function normalizeTrack(raw: unknown): ShippoTrackInput {
+  if (!raw || typeof raw !== 'object') throw new MalformedTrackError('track body');
+  const source = raw as Record<string, unknown>;
+  const carrier = text(source['carrier']);
+  const trackingNumber = text(source['tracking_number']) ?? text(source['trackingNumber']);
+  if (!carrier) throw new MalformedTrackError('carrier');
+  if (!trackingNumber) throw new MalformedTrackError('tracking_number');
+  const result: ShippoTrackInput = { carrier, trackingNumber };
+  // Carried through because the README tells merchants to key resolveOrder on it. Shippo sends
+  // JSON null when the label was not bought on Shippo, which must stay absent rather than become
+  // the string "null".
+  const transaction = text(source['transaction']);
+  if (transaction !== undefined) result.transaction = transaction;
+  const status = normalizeStatus(source['tracking_status'] ?? source['trackingStatus']);
+  if (status) result.trackingStatus = status;
+  const rawHistory = source['tracking_history'] ?? source['trackingHistory'];
+  if (Array.isArray(rawHistory)) {
+    const history: ShippoTrackingStatusInput[] = [];
+    const droppedHistoryIndexes: number[] = [];
+    rawHistory.forEach((entry, index) => {
+      const normalized = normalizeStatus(entry, false);
+      if (normalized) history.push(normalized);
+      else droppedHistoryIndexes.push(index);
+    });
+    if (history.length) result.trackingHistory = history;
+    if (droppedHistoryIndexes.length) result.droppedHistoryIndexes = droppedHistoryIndexes;
+  }
+  return result;
+}
+
+/**
+ * Design decision 2. PRE_TRANSIT is processing, because a label exists but the carrier has not
+ * taken possession. shipped is the carrier acceptance scan and nothing else. A TRANSIT substatus
+ * that requires action is a failed_attempt, because an autonomous flow watching for in_transit
+ * would otherwise wait while the parcel sits at a depot. RETURNED with package_unclaimed is a
+ * failed_attempt too: the buyer can still collect it, and calling it a completed return would
+ * make a restock bot count inventory nobody has shipped back. Anything outside the six
+ * documented statuses throws instead of degrading to a plausible wrong answer.
+ */
+export function mapTrackingStatus(
+  status: string,
+  substatusCode?: string | null,
+  actionRequired?: boolean,
+): FulfillmentEventType {
+  const sub = (substatusCode ?? '').toLowerCase();
+  switch (status.toUpperCase()) {
+    case 'DELIVERED':
+      return 'delivered';
+    case 'RETURNED':
+      return sub === 'package_unclaimed' ? 'failed_attempt' : 'returned_to_sender';
+    case 'FAILURE':
+      return 'undeliverable';
+    case 'TRANSIT':
+      if (sub === 'package_accepted') return 'shipped';
+      if (TRANSIT_NEEDS_ACTION.has(sub) || actionRequired === true) return 'failed_attempt';
+      return 'in_transit';
+    case 'PRE_TRANSIT':
+      return 'processing';
+    case 'UNKNOWN':
+      return 'processing';
+    default:
+      throw new UnmappedTrackingStatusError(status, substatusCode ?? undefined);
+  }
+}
+
+/**
+ * Design decision 3, in precedence order. A blank candidate falls through to the next one.
+ *
+ * Candidates are evaluated LAZILY, one at a time, and the first resolved one wins: a merchant
+ * template is arbitrary caller code, and building the whole list up front let a template that
+ * throws defeat an explicit trackingUrl that outranks it. A template with nothing above it is
+ * still reached, so a merchant bug surfaces rather than being swallowed.
+ *
+ * The three candidates built FROM the tracking number (merchant template, Shippo tracking page,
+ * built-in table) are computed from a single trimmed value, and contribute nothing at all when
+ * that value is blank: shippoTrackingPageUrl in particular has no blank guard of its own, and
+ * would otherwise return a truthy but untrackable URL such as ".../usr_42/ups/" (trailing slash,
+ * no number), which would outrank the built-in table and silently swallow the tracking_url-omitted
+ * warning in buildFulfillmentEventResult. An explicit trackingUrl or a transaction's
+ * tracking_url_provider is untouched by this: neither is derived from the tracking number, so both
+ * remain legitimate answers even when Shippo has no usable number for us (pinned by the "a missing
+ * tracking number past processing is warned about too" test, which expects an explicit trackingUrl
+ * to still resolve against a blank tracking number).
+ */
+export function resolveTrackingUrl(
+  track: Pick<ShippoTrackInput, 'carrier' | 'trackingNumber'>,
+  opts: ResolveTrackingUrlOptions,
+): string | undefined {
+  const trackingNumber = track.trackingNumber.trim();
+  // templateTrackingUrl, not carrierTrackingUrl: only a pattern the merchant actually supplied for
+  // THIS carrier ranks here. carrierTrackingUrl falls through to the built-in table when no
+  // template matches, which would return a built-in URL at this position and leave the merchant's
+  // own Shippo tracking page unreachable for USPS, UPS, FedEx and DHL Express.
+  const candidates: Array<() => string | undefined> = [
+    () => opts.trackingUrl,
+    () => opts.transaction?.trackingUrlProvider,
+    () =>
+      trackingNumber
+        ? templateTrackingUrl(track.carrier, trackingNumber, opts.trackingUrlTemplates)
+        : undefined,
+    () =>
+      trackingNumber && opts.shippoTrackingUserId
+        ? shippoTrackingPageUrl(opts.shippoTrackingUserId, track.carrier, trackingNumber)
+        : undefined,
+    () => (trackingNumber ? carrierTrackingUrl(track.carrier, trackingNumber) : undefined),
+  ];
+  for (const candidate of candidates) {
+    const url = candidate()?.trim();
+    if (url) return url;
+  }
+  return undefined;
+}
+
+const NAIVE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+/**
+ * Shippo documents status_date as UTC, and its test-mode payloads omit the offset. Reading a
+ * naive string with the platform's local timezone would make every golden move with TZ, so an
+ * offset-less timestamp is explicitly read as UTC.
+ *
+ * `field` is the path the value came from, so the MalformedTrackError names where to look rather
+ * than saying only that some timestamp somewhere was unreadable. An Invalid Date is refused here
+ * too: Date.prototype.toISOString throws a bare RangeError on one, which would escape this
+ * library's error taxonomy.
+ */
+function toIso(value: Date | string, field: string): string {
+  const parsed =
+    value instanceof Date
+      ? value
+      : new Date(NAIVE_TIMESTAMP.test(value.trim()) ? `${value.trim().replace(' ', 'T')}Z` : value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new MalformedTrackError(`${field} is not a readable timestamp: ${JSON.stringify(String(value))}`);
+  }
+  return parsed.toISOString();
+}
+
+function validLineItems(items: LineItemRef[] | undefined): items is LineItemRef[] {
+  return (
+    Array.isArray(items) &&
+    items.length > 0 &&
+    items.every(
+      (item) =>
+        typeof item?.id === 'string' &&
+        item.id.length > 0 &&
+        Number.isInteger(item.quantity) &&
+        item.quantity >= 1,
+    )
+  );
+}
+
+function copyLineItems(items: LineItemRef[]): Array<{ id: string; quantity: number }> {
+  return items.map((item) => ({ id: item.id, quantity: item.quantity }));
+}
+
+function eventId(
+  track: ShippoTrackInput,
+  status: ShippoTrackingStatusInput,
+  occurredAt: string,
+): string {
+  if (status.objectId) return `${track.trackingNumber}:${status.objectId}`;
+  // No object_id: derive a stable id from the whole status identity, so two distinct same-second
+  // scans do not collide into one id (which appendFulfillmentEvent would silently swallow as a
+  // duplicate) and the same scan redelivered keeps one id.
+  const material = [
+    track.carrier,
+    track.trackingNumber,
+    status.status,
+    status.substatus?.code ?? '',
+    occurredAt,
+    status.statusDetails ?? '',
+  ].join('|');
+  return `${track.trackingNumber}:${createHash('sha256').update(material, 'utf8').digest('hex').slice(0, 16)}`;
+}
+
+/**
+ * The reporting form. Returns the event plus every judgment call the mapping made: fields it
+ * omitted, and whether occurred_at came from the carrier scan or from Shippo's ingestion time.
+ * The webhook builder uses this form and surfaces the warnings, so nothing is dropped in silence.
+ */
+export function buildFulfillmentEventResult(
+  track: ShippoTrackInput,
+  opts: BuildEventOptions,
+): { event: FulfillmentEvent; warnings: string[]; occurredAtSource: 'status_date' | 'object_created' } {
+  if (!validLineItems(opts.lineItems)) throw new LineItemsRequiredError();
+  const status = track.trackingStatus;
+  if (!status) throw new MissingTrackingStatusError(track.trackingNumber);
+  const occurredAtSource = status.statusDate ? 'status_date' : 'object_created';
+  const occurred = status.statusDate ?? status.objectCreated;
+  if (!occurred) throw new MissingTrackingStatusError(track.trackingNumber);
+
+  const warnings: string[] = [];
+  const type = opts.type ?? mapTrackingStatus(status.status, status.substatus?.code, status.substatus?.actionRequired);
+  const trackingUrl = resolveTrackingUrl(track, opts);
+  const trackingNumber = track.trackingNumber.trim();
+  const pastProcessing = type !== 'processing';
+  // Both warnings lead with a stable code, the way SHIPMENT_WARNINGS does, so a merchant switches
+  // on the prefix rather than parsing the sentence after it. These two are what surfaces on
+  // TrackWebhookPlan.warnings, which is the warning list merchants actually read.
+  if (pastProcessing && !trackingUrl) {
+    warnings.push(
+      `tracking_url_omitted: no tracking_url for ${track.carrier} ${track.trackingNumber} on a ` +
+        `${type} event: no explicit url, no transaction tracking_url_provider, no merchant ` +
+        'template, no shippoTrackingUserId and no built-in url for this carrier',
+    );
+  }
+  if (pastProcessing && !trackingNumber) {
+    warnings.push(`tracking_number_missing: no tracking_number for ${track.carrier} on a ${type} event`);
+  }
+  if (pastProcessing && opts.requireTrackingUrl && (!trackingUrl || !trackingNumber)) {
+    throw new TrackingUrlUnresolvedError(track.carrier, track.trackingNumber);
+  }
+  if (occurredAtSource === 'object_created') {
+    warnings.push(
+      'occurred_at_fallback: occurred_at fell back to object_created (Shippo ingestion time) ' +
+        'because tracking_status.status_date was absent',
+    );
+  }
+
+  const occurredAt = toIso(
+    occurred,
+    occurredAtSource === 'status_date' ? 'tracking_status.status_date' : 'tracking_status.object_created',
+  );
+  const event: FulfillmentEvent = {
+    id: opts.id ?? eventId(track, status, occurredAt),
+    occurred_at: occurredAt,
+    type,
+    line_items: copyLineItems(opts.lineItems),
+  };
+  if (trackingNumber) event.tracking_number = trackingNumber;
+  if (trackingUrl) event.tracking_url = trackingUrl;
+  event.carrier = carrierDisplayName(track.carrier, opts.carrierDisplayNames);
+  const details = status.statusDetails?.trim();
+  if (details) event.description = details;
+  return { event, warnings, occurredAtSource };
+}
+
+/** The pure form: one Shippo tracking status as one UCP fulfillment_event. */
+export function buildFulfillmentEvent(track: ShippoTrackInput, opts: BuildEventOptions): FulfillmentEvent {
+  return buildFulfillmentEventResult(track, opts).event;
+}
+
+/**
+ * Every entry in tracking_history as an event, oldest first, which is the order Shippo returns.
+ * Use this to backfill an order that was already in flight when the integration went live.
+ */
+export function buildFulfillmentEvents(track: ShippoTrackInput, opts: BuildEventOptions): FulfillmentEvent[] {
+  // id and type are per-status, not per-track: forwarding a caller's explicit override to every
+  // entry would collapse the whole history onto one id (or one type), so each event is built from
+  // its own derived id and its own mapped type instead.
+  const { id: _ignoredId, type: _ignoredType, ...perEntryOpts } = opts;
+  return (track.trackingHistory ?? []).map((status) =>
+    buildFulfillmentEvent({ ...track, trackingStatus: status }, perEntryOpts),
+  );
+}
+
+/**
+ * The reporting form of buildFulfillmentEvents, mirroring buildFulfillmentEventResult: every
+ * history entry as an event, oldest first, plus the warnings the whole backfill produced.
+ *
+ * Warnings are collected per event and DEDUPLICATED on the full string, which is the code plus the
+ * sentence: a carrier with no resolvable tracking URL would otherwise repeat the same omission once
+ * per scan, and a long history turns one fact into forty lines of log. Two scans that differ (a
+ * different event type, say) keep their own sentences, so deduplication never hides one.
+ */
+export function buildFulfillmentEventsResult(
+  track: ShippoTrackInput,
+  opts: BuildEventOptions,
+): { events: FulfillmentEvent[]; warnings: string[] } {
+  // Same reasoning as buildFulfillmentEvents: id and type are per-status, never per-track.
+  const { id: _ignoredId, type: _ignoredType, ...perEntryOpts } = opts;
+  const events: FulfillmentEvent[] = [];
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  for (const status of track.trackingHistory ?? []) {
+    const result = buildFulfillmentEventResult({ ...track, trackingStatus: status }, perEntryOpts);
+    events.push(result.event);
+    for (const warning of result.warnings) {
+      if (seen.has(warning)) continue;
+      seen.add(warning);
+      warnings.push(warning);
+    }
+  }
+  return { events, warnings };
+}
+
+/**
+ * The buyer-facing promise that pairs with the append-only event log. UCP does not require a
+ * business to publish expectations, but without one the buyer sees no arrival estimate on the
+ * order. expectation.destination is a BARE postal_address, so a shipping destination's id and
+ * type come off here rather than in every merchant's own code.
+ */
+export function buildExpectation(opts: BuildExpectationOptions): Expectation {
+  if (!validLineItems(opts.lineItems)) throw new LineItemsRequiredError();
+  const { id: _ignoredId, type: _ignoredType, ...destination } = opts.destination;
+  const expectation: Expectation = {
+    id: opts.id,
+    line_items: copyLineItems(opts.lineItems),
+    method_type: opts.methodType ?? 'shipping',
+    destination: destination as PostalAddress,
+  };
+  const description = opts.description ?? opts.option?.description?.plain;
+  if (description) expectation.description = description;
+  if (opts.fulfillableOn) expectation.fulfillable_on = opts.fulfillableOn;
+  return expectation;
+}
+
+/**
+ * The first fulfillment event: the label exists and the carrier has not taken possession. Right
+ * after purchase the merchant holds a Shippo Transaction rather than a Track, and this is the one
+ * moment tracking_url_provider is guaranteed to be in hand, which is why design decision 3 ranks
+ * it above the built-in carrier table.
+ *
+ * Two caveats worth knowing before a split shipment. With neither an objectId nor a trackingNumber
+ * the default event id is the constant "transaction:processing", so two parcels on one order would
+ * collide and appendFulfillmentEvent would swallow the second as a duplicate: pass `id` yourself
+ * when you split. And with neither `occurredAt` nor `transaction.objectCreated` this falls back to
+ * the wall clock, which is the only nondeterminism in the library: pass one of them in a test.
+ */
+export function buildProcessingEvent(
+  transaction: ShippoTransactionInput,
+  opts: BuildProcessingEventOptions,
+): FulfillmentEvent {
+  if (!validLineItems(opts.lineItems)) throw new LineItemsRequiredError();
+  const trackingNumber = transaction.trackingNumber?.trim();
+  const occurredAt = toIso(
+    opts.occurredAt ?? transaction.objectCreated ?? new Date(),
+    opts.occurredAt !== undefined ? 'occurredAt' : 'transaction.object_created',
+  );
+  const event: FulfillmentEvent = {
+    id: opts.id ?? `${transaction.objectId ?? trackingNumber ?? 'transaction'}:processing`,
+    occurred_at: occurredAt,
+    type: 'processing',
+    line_items: copyLineItems(opts.lineItems),
+  };
+  // Resolved regardless of whether this transaction has a tracking number: an explicit
+  // opts.trackingUrl or a transaction's own tracking_url_provider is not derived from the
+  // tracking number, so it must not be discarded just because this transaction has none. The
+  // other three candidates (template, Shippo tracking page, built-in table) still need a number,
+  // and resolveTrackingUrl already treats a blank one as contributing nothing at those positions.
+  const trackingUrl = resolveTrackingUrl(
+    { carrier: opts.carrier, trackingNumber: trackingNumber ?? '' },
+    { ...opts, transaction: opts.transaction ?? transaction },
+  );
+  if (trackingNumber) event.tracking_number = trackingNumber;
+  if (trackingUrl) event.tracking_url = trackingUrl;
+  event.carrier = carrierDisplayName(opts.carrier, opts.carrierDisplayNames);
+  return event;
+}

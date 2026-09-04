@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added `tools/ucp-fulfillment` (`@shippo/ucp-fulfillment`), a TypeScript library mapping Shippo rates and tracking onto the UCP 2026-08-25 fulfillment extension and order capability (AI-469).
+
 ## 1.5.2
 
 `package.json:version` 1.5.1 -> 1.5.2. Ships the parameter-casing and error-guidance corrections below to the Claude app-plugin release (`shippo-plugin.zip`).
