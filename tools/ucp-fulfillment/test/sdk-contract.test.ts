@@ -35,7 +35,7 @@ test('the shippo SDK types and this library input types still agree', () => {
   // type alone: a renamed SDK method (shipments.create, rates.listShipmentRatesByCurrencyCode,
   // trackingStatus.get) fails this line. The constructor only builds an object; nothing is called
   // on it and no request is made, so the placeholder key never reaches Shippo.
-  const like: ShippoSdkLike = new Shippo({ apiKeyHeader: 'shippo_test_placeholder' });
+  const like: ShippoSdkLike = new Shippo({ apiKeyHeader: 'shippo_test_xxxxxxxxxxxx' });
   void like;
   // The assertions above are erased at runtime; this test exists so the file is part of the
   // suite and a type error here fails `npm run typecheck` with a clear message.
