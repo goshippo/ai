@@ -52,6 +52,21 @@ const REQUIRED_ORDER_KEYS = [
 ] as const;
 
 /**
+ * The headers this library builds itself. A signer may add Signature and Signature-Input but must
+ * never touch any of these, in any case: HTTP header names are case-insensitive on the wire, and
+ * undici merges a differently-cased duplicate into the same outgoing header rather than rejecting
+ * it, so a lowercase `content-digest` from a signer would otherwise slip past a name-exact check
+ * and silently corrupt (or duplicate) the header the Content-Digest was computed for.
+ */
+const RESERVED_REQUEST_HEADERS = [
+  'Content-Type',
+  'Content-Digest',
+  'Webhook-Id',
+  'Webhook-Timestamp',
+  'UCP-Agent',
+] as const;
+
+/**
  * Fail at the library boundary rather than at the platform. An order that is missing a required
  * member produces a webhook body a conformant Platform answers with a 400, which the merchant
  * would otherwise discover in production against a real partner.
@@ -77,6 +92,14 @@ export function assertOrderShape(order: unknown): asserts order is Order {
     (typeof candidate.fulfillment !== 'object' || Array.isArray(candidate.fulfillment))
   ) {
     problems.push('fulfillment must be an object with expectations and events');
+  } else if (candidate.fulfillment && typeof candidate.fulfillment === 'object') {
+    // A non-array fulfillment.events would otherwise reach classifyEvent's `events.some(...)`
+    // unguarded and throw a raw TypeError instead of the build_failed classification a webhook
+    // endpoint knows how to acknowledge.
+    const events = (candidate.fulfillment as Record<string, unknown>).events;
+    if (events !== undefined && events !== null && !Array.isArray(events)) {
+      problems.push('fulfillment.events must be an array');
+    }
   }
   if (problems.length) throw new InvalidOrderError(problems);
 }
@@ -216,18 +239,35 @@ export interface BuildOrderEventRequestOptions {
   fulfilledResolver?: FulfilledResolver;
 }
 
-function assertBusinessProfileUrl(value: string): void {
+/**
+ * Validates businessProfileUrl and returns its canonical `href`, not the caller's raw string:
+ * `new URL()` trims stray leading/trailing whitespace and otherwise normalizes the input, and the
+ * UCP-Agent header must carry that canonical form rather than whatever bytes the caller happened
+ * to pass. Userinfo, a query string and a fragment are all rejected: none of them can appear on a
+ * bare /.well-known/ucp profile URL, and silently dropping them (as reading only protocol and
+ * pathname would) would let a caller believe an extra component was accepted.
+ */
+function assertBusinessProfileUrl(value: string): string {
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     throw new InvalidOrderError([`businessProfileUrl is not a URL: ${value}`]);
   }
-  if (url.protocol !== 'https:' || url.pathname !== '/.well-known/ucp') {
+  if (
+    url.protocol !== 'https:' ||
+    url.pathname !== '/.well-known/ucp' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.search !== '' ||
+    url.hash !== ''
+  ) {
     throw new InvalidOrderError([
-      `businessProfileUrl must be an https URL whose path is exactly /.well-known/ucp, got ${value}`,
+      'businessProfileUrl must be an https URL whose path is exactly /.well-known/ucp, with no ' +
+        `userinfo, query string or fragment, got ${value}`,
     ]);
   }
+  return url.href;
 }
 
 /**
@@ -242,7 +282,7 @@ function assertBusinessProfileUrl(value: string): void {
  */
 export function buildOrderEventRequest(opts: BuildOrderEventRequestOptions): OrderEventRequest {
   assertOrderShape(opts.order);
-  assertBusinessProfileUrl(opts.businessProfileUrl);
+  const businessProfileUrl = assertBusinessProfileUrl(opts.businessProfileUrl);
   const occurredAt = Date.parse(opts.event.occurred_at);
   if (Number.isNaN(occurredAt)) {
     throw new InvalidOrderError([`event occurred_at is not an RFC 3339 timestamp: ${opts.event.occurred_at}`]);
@@ -258,7 +298,7 @@ export function buildOrderEventRequest(opts: BuildOrderEventRequestOptions): Ord
       'Content-Digest': contentDigest(body),
       'Webhook-Id': opts.webhookId ?? webhookIdForEvent(opts.event.id),
       'Webhook-Timestamp': String(Math.floor(occurredAt / 1000)),
-      'UCP-Agent': `profile="${opts.businessProfileUrl}"`,
+      'UCP-Agent': `profile="${businessProfileUrl}"`,
     },
     body,
   };
@@ -290,12 +330,13 @@ export async function sendOrderEvent(
 ): Promise<{ status: number }> {
   if (!opts.sign && !opts.allowUnsigned) throw new UnsignedWebhookError();
   const signed = opts.sign ? await opts.sign(request) : {};
-  for (const reserved of ['Content-Digest', 'Content-Type']) {
-    if (reserved in signed && signed[reserved] !== request.headers[reserved]) {
+  const signedKeysLower = new Set(Object.keys(signed).map((key) => key.toLowerCase()));
+  for (const reserved of RESERVED_REQUEST_HEADERS) {
+    if (signedKeysLower.has(reserved.toLowerCase())) {
       throw new SignerConflictError(reserved);
     }
   }
-  const doFetch = opts.fetch ?? (globalThis.fetch as unknown as FetchLike);
+  const doFetch: FetchLike = opts.fetch ?? globalThis.fetch;
   // Not AbortSignal.timeout(): its internal timer is unref'd by design, so it never fires when
   // nothing else keeps the event loop alive (a short-lived script or a lambda handler awaiting
   // this call and nothing else, or a FetchLike double with no I/O of its own, as this library's

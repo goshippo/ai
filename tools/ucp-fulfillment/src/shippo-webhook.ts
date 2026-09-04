@@ -121,6 +121,9 @@ function headerValue(headers: Record<string, string | undefined> | undefined, na
  * A permanent build failure is returned as { handled: false, reason: 'build_failed', error }
  * rather than thrown, so a webhook endpoint can acknowledge it and stop an infinite retry loop.
  * A failed trust check still throws, because a rejected signature is not a payload to acknowledge.
+ * An old Shippo API version on a track_updated payload also still throws, for the same reason;
+ * on any other event type it is irrelevant and the payload is skipped as not_track_updated
+ * instead.
  */
 export async function buildTrackWebhookRequest(
   rawBody: string,
@@ -128,19 +131,27 @@ export async function buildTrackWebhookRequest(
 ): Promise<TrackWebhookPlan> {
   verifyShippoTrust(rawBody, opts.trust, { now: opts.now, toleranceSeconds: opts.toleranceSeconds });
 
+  // Parsing and the not_track_updated check sit outside the try/catch below (which converts a
+  // permanent UcpFulfillmentError to build_failed) so that a malformed body still resolves to a
+  // clean build_failed result via this direct return, and so the API-version check that follows
+  // can still throw for real: it must not be swallowed into build_failed.
+  let envelope: { event?: unknown; data?: unknown; test?: unknown };
+  try {
+    envelope = JSON.parse(rawBody) as { event?: unknown; data?: unknown; test?: unknown };
+  } catch {
+    return { handled: false, reason: 'build_failed', error: new MalformedTrackError('JSON body') };
+  }
+  if (!envelope || envelope.event !== 'track_updated') {
+    return { handled: false, reason: 'not_track_updated' };
+  }
+
+  // Below the not_track_updated return: an old API version only matters for a track_updated
+  // payload this library is actually about to read as a Track. An unrelated event type (say,
+  // transaction_created) is skipped regardless of the sender's API version, not thrown for it.
   const version = headerValue(opts.headers, 'shippo-api-version');
   if (version && version < '2018-02-08') throw new ShippoApiVersionError(version);
 
   try {
-    let envelope: { event?: unknown; data?: unknown; test?: unknown };
-    try {
-      envelope = JSON.parse(rawBody) as { event?: unknown; data?: unknown; test?: unknown };
-    } catch (cause) {
-      throw new MalformedTrackError('JSON body');
-    }
-    if (!envelope || envelope.event !== 'track_updated') {
-      return { handled: false, reason: 'not_track_updated' };
-    }
     if (envelope.test === true && !opts.allowTestMode) return { handled: false, reason: 'test_mode' };
 
     const track = normalizeTrack(envelope.data);

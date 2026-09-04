@@ -73,6 +73,17 @@ test('assertOrderShape names every missing piece at once', () => {
   assert.throws(() => assertOrderShape(noFulfillment), /fulfillment/);
 });
 
+test('assertOrderShape catches a non-array fulfillment.events before it becomes a raw TypeError', () => {
+  const badEvents = { ...order(), fulfillment: { expectations: [], events: 'nope' } };
+  assert.throws(
+    () => assertOrderShape(badEvents),
+    (error: unknown) =>
+      error instanceof InvalidOrderError && error.problems.includes('fulfillment.events must be an array'),
+  );
+  // A well-formed fulfillment with events omitted or null is still fine.
+  assert.doesNotThrow(() => assertOrderShape({ ...order(), fulfillment: { expectations: [] } }));
+});
+
 test('appendFulfillmentEvent appends once, never mutates, and copies line_items', () => {
   const o = order();
   const next = appendFulfillmentEvent(o, EVENT);
@@ -278,6 +289,9 @@ test('the business profile URL is validated locally rather than at the platform'
     'https://merchant.example/profile',
     'https://merchant.example/.well-known/ucp/extra',
     'not a url',
+    'https://merchant.example/.well-known/ucp?x=1',
+    'https://merchant.example/.well-known/ucp#frag',
+    'https://user:pass@merchant.example/.well-known/ucp',
   ]) {
     assert.throws(
       () => buildOrderEventRequest({ order: order(), event: EVENT, webhookUrl: WEBHOOK_URL, businessProfileUrl: bad }),
@@ -285,6 +299,16 @@ test('the business profile URL is validated locally rather than at the platform'
       bad,
     );
   }
+});
+
+test('the business profile URL is normalized to its href, not passed through raw', () => {
+  const request = buildOrderEventRequest({
+    order: order(),
+    event: EVENT,
+    webhookUrl: WEBHOOK_URL,
+    businessProfileUrl: `  ${PROFILE}  `,
+  });
+  assert.equal(request.headers['UCP-Agent'], `profile="${PROFILE}"`);
 });
 
 test('sendOrderEvent refuses to transmit unsigned unless told to', async () => {
@@ -336,11 +360,34 @@ test('a signer cannot silently replace the digest or the content type', async ()
     sendOrderEvent(request, { fetch: okFetch, sign: () => ({ 'Content-Type': 'text/plain' }) }),
     (error: unknown) => error instanceof SignerConflictError && error.header === 'Content-Type',
   );
-  // Re-sending the identical value is fine.
-  await sendOrderEvent(request, {
-    fetch: okFetch,
-    sign: (req) => ({ 'Content-Digest': req.headers['Content-Digest'] }),
+  // Even restating the identical value is refused: the signer's only job is Signature and
+  // Signature-Input, and a duplicate header entry is a wire-level hazard regardless of whether
+  // its value happens to match.
+  await assert.rejects(
+    sendOrderEvent(request, {
+      fetch: okFetch,
+      sign: (req) => ({ 'Content-Digest': req.headers['Content-Digest'] }),
+    }),
+    (error: unknown) => error instanceof SignerConflictError && error.header === 'Content-Digest',
+  );
+});
+
+test('a signer conflict is caught case-insensitively, so a lowercase header cannot slip past the guard', async () => {
+  const request = buildOrderEventRequest({
+    order: order(),
+    event: EVENT,
+    webhookUrl: WEBHOOK_URL,
+    businessProfileUrl: PROFILE,
   });
+  await assert.rejects(
+    sendOrderEvent(request, { fetch: okFetch, sign: () => ({ 'content-digest': 'sha-256=:AAAA:' }) }),
+    (error: unknown) =>
+      error instanceof SignerConflictError && error.header === 'Content-Digest' && error.retryable === false,
+  );
+  await assert.rejects(
+    sendOrderEvent(request, { fetch: okFetch, sign: () => ({ 'webhook-id': '11111111-1111-5111-8111-111111111111' }) }),
+    (error: unknown) => error instanceof SignerConflictError && error.header === 'Webhook-Id',
+  );
 });
 
 test('platform 4xx and 5xx are distinguishable, so a queue knows whether to retry', async () => {
@@ -393,12 +440,14 @@ test('a hung platform aborts rather than blocking the caller forever', async () 
     webhookUrl: WEBHOOK_URL,
     businessProfileUrl: PROFILE,
   });
+  // Rejects with the signal's own reason, not an invented AbortError, so this test documents the
+  // library's actual behavior: its internal timeout names its abort reason TimeoutError.
   const hang: FetchLike = (_url, init) =>
     new Promise((_resolve, reject) => {
-      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
     });
   await assert.rejects(sendOrderEvent(request, { allowUnsigned: true, fetch: hang, timeoutMs: 25 }), {
-    name: 'AbortError',
+    name: 'TimeoutError',
   });
 });
 

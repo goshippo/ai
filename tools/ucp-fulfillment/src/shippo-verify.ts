@@ -36,6 +36,12 @@ function constantTimeEquals(a: string, b: string): boolean {
  * as hex. Pass the raw bytes: once the body has been through JSON.parse the exact bytes are gone
  * and re-serializing will not reproduce them, which is why both webhook entry points in this
  * library take a string rather than an object.
+ *
+ * `toleranceSeconds` (default 300) bounds how old the signed `t` may be. Shippo's own retry of a
+ * failed delivery replays the SAME `t` from the original send rather than minting a new one, so a
+ * retry landing more than five minutes after the original attempt is rejected as untrusted here,
+ * not accepted as a fresh request. A caller that needs to accept Shippo's retries after a longer
+ * outage should raise `toleranceSeconds` accordingly.
  */
 export function verifyShippoSignature(
   rawBody: string,

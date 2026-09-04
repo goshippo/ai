@@ -246,6 +246,14 @@ test('an old Shippo API version is refused with an explanation', async () => {
   assert.deepEqual(fine, { handled: false, reason: 'no_order' });
 });
 
+test('an old Shippo API version only matters for a track_updated payload', async () => {
+  const result = await buildTrackWebhookRequest(
+    JSON.stringify({ event: 'transaction_created', test: false, data: {} }),
+    { ...base, headers: { 'shippo-api-version': '2017-03-29' }, resolveOrder: () => undefined },
+  );
+  assert.deepEqual(result, { handled: false, reason: 'not_track_updated' });
+});
+
 test('an omitted tracking URL surfaces as a warning on the result, never as silence', async () => {
   const plan = await buildTrackWebhookRequest(raw('track_updated.pre_transit.json'), {
     ...base,
