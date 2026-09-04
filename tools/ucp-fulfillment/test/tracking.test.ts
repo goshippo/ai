@@ -398,7 +398,7 @@ test('an occurred_at derived from Shippo ingestion time is reported, not hidden'
   assert.equal(result.occurredAtSource, 'object_created');
   assert.equal(result.event.occurred_at, '2026-09-03T16:00:00.000Z');
   assert.deepEqual(result.warnings, [
-    'occurred_at fell back to object_created (Shippo ingestion time) because tracking_status.status_date was absent',
+    'occurred_at_fallback: occurred_at fell back to object_created (Shippo ingestion time) because tracking_status.status_date was absent',
   ]);
   const withDate = buildFulfillmentEventResult(base, {
     lineItems: LINE_ITEMS,

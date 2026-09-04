@@ -449,8 +449,8 @@ export function buildFulfillmentEventResult(
   }
   if (occurredAtSource === 'object_created') {
     warnings.push(
-      'occurred_at fell back to object_created (Shippo ingestion time) because ' +
-        'tracking_status.status_date was absent',
+      'occurred_at_fallback: occurred_at fell back to object_created (Shippo ingestion time) ' +
+        'because tracking_status.status_date was absent',
     );
   }
 
