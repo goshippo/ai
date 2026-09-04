@@ -239,7 +239,13 @@ function amountOf(rate: ShippoRateInput, opts: BuildOptionOptions | CatalogPrevi
   const base = toMinorUnits(price.amount, price.currency, opts.currencyExponents);
   if (!opts.adjustAmount) return base;
   const adjusted = opts.adjustAmount(rate, base);
-  if (!Number.isInteger(adjusted) || adjusted < 0) throw new InvalidAmountError(adjusted);
+  if (!Number.isInteger(adjusted) || adjusted < 0) {
+    throw new InvalidAmountError(
+      adjusted,
+      `adjustAmount returned ${JSON.stringify(adjusted)} for rate ${rate.objectId}: it must return a ` +
+        `non-negative whole number of minor units, and it was given ${base}.`,
+    );
+  }
   if (adjusted > MAX_MINOR_UNITS) throw new AmountRangeError(adjusted, price.currency);
   return adjusted;
 }
@@ -247,7 +253,13 @@ function amountOf(rate: ShippoRateInput, opts: BuildOptionOptions | CatalogPrevi
 /** The amount on the option's `type: "total"` entry, which is what the buyer pays. */
 export function optionTotalAmount(option: FulfillmentOption): number {
   const total = option.totals.find((entry) => entry.type === 'total');
-  if (!total) throw new InvalidAmountError('fulfillment_option.totals has no type "total" entry');
+  if (!total) {
+    throw new InvalidAmountError(
+      option.totals,
+      `fulfillment_option ${JSON.stringify(option.id)} has no entry of type "total" in totals, so ` +
+        'there is no amount the buyer pays. UCP requires a total entry on every fulfillment_option.',
+    );
+  }
   return total.amount;
 }
 
@@ -327,11 +339,27 @@ export function buildFulfillmentOptionsResult(
   return { options: dedupeAndSort(built), skipped };
 }
 
+/**
+ * The rate kept per option id, ranked exactly as buildFulfillmentOptionsResult ranks them.
+ *
+ * A rate this library cannot price is SKIPPED rather than thrown, matching the tolerance of the
+ * Result form the checkout path uses: buildShippingFulfillment happily returns a checkout built
+ * from a mixed-currency rate array, and the README then calls matchSelectedOption and
+ * rateIdsByOptionId on that same array. Throwing here would give a merchant a working checkout and
+ * an exception at the moment the buyer chooses. A skipped rate is simply not selectable, which is
+ * the same answer the option list already gave.
+ */
 function winningRates(rates: ShippoRateInput[], opts: BuildOptionOptions): Map<string, ShippoRateInput> {
   const best = new Map<string, { rate: ShippoRateInput; amount: number }>();
   for (const rate of rates) {
     const id = resolveOptionId(rate, opts);
-    const amount = amountOf(rate, opts);
+    let amount: number;
+    try {
+      amount = amountOf(rate, opts);
+    } catch (error) {
+      if (!(error instanceof UcpFulfillmentError)) throw error;
+      continue;
+    }
     const current = best.get(id);
     if (!current || amount < current.amount) best.set(id, { rate, amount });
   }

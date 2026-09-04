@@ -136,6 +136,32 @@ test('an unrecognized destination selection is rejected rather than quietly igno
   );
 });
 
+test('a destination id that matches more than once is rejected, not silently accepted', () => {
+  // UCP requires EXACTLY ONE destination whose id equals the accepted selection, so a duplicate id
+  // is as unusable as a missing one: the buyer's address would be ambiguous on the response.
+  assert.throws(
+    () =>
+      buildShippingMethod({
+        id: 'shipping',
+        lineItemIds: ['li_shirt'],
+        destinations: [DEST, { ...DEST, postal_code: '10001' }],
+        selectedDestinationId: 'dest_1',
+        groups: [],
+      }),
+    (error: unknown) => error instanceof SelectedDestinationUnknownError && error.destinationId === 'dest_1',
+  );
+  // A second destination with its own id is fine: exactly one still matches.
+  assert.doesNotThrow(() =>
+    buildShippingMethod({
+      id: 'shipping',
+      lineItemIds: ['li_shirt'],
+      destinations: [DEST, { ...DEST, id: 'dest_2' }],
+      selectedDestinationId: 'dest_1',
+      groups: [],
+    }),
+  );
+});
+
 test('golden: a rejected destination selection carries the message UCP requires', () => {
   const message = destinationRejectedMessage({ methodIndex: 0, destinationId: 'dest_9' });
   assert.deepEqual(message, {
@@ -146,7 +172,7 @@ test('golden: a rejected destination selection carries the message UCP requires'
     path: '$.fulfillment.methods[0].selected_destination_id',
   });
   validateUcp(SCHEMA_IDS.message, message);
-  assertOnlyKnownKeys(SCHEMA_IDS.messageError, message as unknown as Record<string, unknown>);
+  assertOnlyKnownKeys(SCHEMA_IDS.messageError, message);
   // The path is the attempted selection, not the destination it names: the checkout spec asks for
   // the most specific path applicable, and this is a different condition from an undeliverable
   // address, which points at destinations[0] instead.
@@ -204,7 +230,7 @@ test('golden: the whole container from a platform destination and a rate list', 
     },
   ]);
   validateUcp(SCHEMA_IDS.fulfillmentMethod, methods[0]);
-  assertOnlyKnownKeys(SCHEMA_IDS.fulfillmentMethod, methods[0] as unknown as Record<string, unknown>);
+  assertOnlyKnownKeys(SCHEMA_IDS.fulfillmentMethod, methods[0]);
 });
 
 test('a destination that already carries an id keeps it, and the type is always stamped', () => {
@@ -257,7 +283,7 @@ test('an empty rate list yields an empty option list plus the message a platform
     path: '$.fulfillment.methods[0].destinations[0]',
   });
   validateUcp(SCHEMA_IDS.message, message);
-  assertOnlyKnownKeys(SCHEMA_IDS.messageError, message as unknown as Record<string, unknown>);
+  assertOnlyKnownKeys(SCHEMA_IDS.messageError, message);
 });
 
 test('the undeliverable message falls back to a sentence a buyer can act on', () => {

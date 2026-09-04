@@ -18,7 +18,13 @@ import {
   RATE_MAX_AGE_MS,
   type ShippoRateInput,
 } from '../src/rates.ts';
-import { CurrencyMismatchError, MalformedRateError, InvalidAmountError } from '../src/errors.ts';
+import { MAX_MINOR_UNITS } from '../src/money.ts';
+import {
+  AmountRangeError,
+  CurrencyMismatchError,
+  MalformedRateError,
+  InvalidAmountError,
+} from '../src/errors.ts';
 import { validateUcp, assertOnlyKnownKeys, SCHEMA_IDS } from './helpers/ucp-validator.ts';
 
 const NOW = new Date('2026-09-03T15:00:00Z'); // Thursday
@@ -201,11 +207,39 @@ test('two carrier accounts on the same service collapse to the cheaper option', 
   const expensive = { ...usps, objectId: 'rate_usps_a', carrierAccount: 'ca_usps_a', amount: '9.10' };
   const cheap = { ...usps, objectId: 'rate_usps_b', carrierAccount: 'ca_usps_b', amount: '8.35' };
   const options = buildFulfillmentOptions([expensive, cheap], USD);
-  assert.equal(options.length, 1, 'the same service must not appear twice with the same id');
-  assert.equal(options[0].id, 'usps_priority');
-  assert.equal(optionTotalAmount(options[0]), 835);
+  // The whole surviving option, not just its id and price: a dedupe that kept the right amount
+  // while dropping the window or the description would still be wrong.
+  assert.deepEqual(options, [
+    {
+      id: 'usps_priority',
+      title: 'USPS Priority Mail',
+      description: { plain: 'Arrives in about 2 days' },
+      carrier: 'USPS',
+      earliest_fulfillment_time: '2026-09-05T00:00:00.000Z',
+      latest_fulfillment_time: '2026-09-07T23:59:59.000Z',
+      totals: [{ type: 'total', amount: 835 }],
+    },
+  ]);
+  checkOption(options[0]);
   assert.deepEqual(rateIdsByOptionId([expensive, cheap], USD), { usps_priority: 'rate_usps_b' });
   assert.equal(matchSelectedOption('usps_priority', [expensive, cheap], USD)?.objectId, 'rate_usps_b');
+});
+
+test('the option lookup tolerates the same mixed-currency list the container skips', () => {
+  // buildShippingFulfillment skips the EUR rate and keeps the checkout working; the two lookups a
+  // merchant calls next, on the same array, must not throw where the builder tolerated.
+  const mixed = [usps, dhl, ups];
+  const { options, skipped } = buildFulfillmentOptionsResult(mixed, USD);
+  assert.deepEqual(options.map((option) => option.id), ['usps_priority', 'ups_next_day_air']);
+  assert.equal(skipped.length, 1);
+  assert.deepEqual(rateIdsByOptionId(mixed, USD), {
+    usps_priority: 'rate_usps_priority',
+    ups_next_day_air: 'rate_ups_next_day',
+  });
+  assert.equal(matchSelectedOption('usps_priority', mixed, USD)?.objectId, 'rate_usps_priority');
+  assert.equal(matchSelectedOption('ups_next_day_air', mixed, USD)?.objectId, 'rate_ups_next_day');
+  // The skipped rate is not selectable, which is the same answer the option list gives.
+  assert.equal(matchSelectedOption('dhl_express_worldwide', mixed, USD), undefined);
 });
 
 test('the strict builder throws on a bad rate; the Result builder reports it and keeps the rest', () => {
@@ -234,9 +268,49 @@ test('displayText and adjustAmount are opt in (design decision 6)', () => {
   assert.deepEqual(labelled.totals, [{ type: 'total', amount: 835, display_text: 'Shipping' }]);
   checkOption(labelled);
   const marked = buildFulfillmentOption(usps, { ...USD, adjustAmount: (_rate, minor) => minor + 200 });
-  assert.equal(optionTotalAmount(marked), 1035);
+  // The whole marked-up option, so a markup that also disturbed the title or the window would fail
+  // here rather than pass a single-field check.
+  assert.deepEqual(marked, {
+    id: 'usps_priority',
+    title: 'USPS Priority Mail',
+    description: { plain: 'Arrives in about 2 days' },
+    carrier: 'USPS',
+    earliest_fulfillment_time: '2026-09-05T00:00:00.000Z',
+    latest_fulfillment_time: '2026-09-07T23:59:59.000Z',
+    totals: [{ type: 'total', amount: 1035 }],
+  });
+  checkOption(marked);
   assert.throws(() => buildFulfillmentOption(usps, { ...USD, adjustAmount: () => 1.5 }), InvalidAmountError);
   assert.throws(() => buildFulfillmentOption(usps, { ...USD, adjustAmount: () => -1 }), InvalidAmountError);
+  // The message names the hook that returned the bad value, not an amount Shippo sent.
+  assert.throws(
+    () => buildFulfillmentOption(usps, { ...USD, adjustAmount: () => 1.5 }),
+    (error: unknown) =>
+      error instanceof InvalidAmountError &&
+      /adjustAmount/.test(error.message) &&
+      !/Unparseable monetary amount/.test(error.message),
+  );
+});
+
+test('a markup above the UCP amount maximum is refused, not silently truncated', () => {
+  assert.throws(
+    () => buildFulfillmentOption(usps, { ...USD, adjustAmount: () => MAX_MINOR_UNITS + 1 }),
+    (error: unknown) => error instanceof AmountRangeError && error.retryable === false,
+  );
+  assert.deepEqual(
+    buildFulfillmentOption(usps, { ...USD, adjustAmount: () => MAX_MINOR_UNITS }).totals,
+    [{ type: 'total', amount: MAX_MINOR_UNITS }],
+  );
+});
+
+test('optionTotalAmount says the total is missing, not that an amount is unparseable', () => {
+  assert.throws(
+    () => optionTotalAmount({ id: 'x', title: 'X', totals: [{ type: 'subtotal', amount: 100 }] }),
+    (error: unknown) =>
+      error instanceof InvalidAmountError &&
+      /no entry of type "total"/.test(error.message) &&
+      !/Unparseable monetary amount/.test(error.message),
+  );
 });
 
 test('a caller can override the id function without forking the library', () => {
