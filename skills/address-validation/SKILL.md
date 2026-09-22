@@ -18,8 +18,8 @@ The Shippo API uses **v1 field names** for address components in most endpoints 
 | `state` | State or province | `CA` |
 | `zip` | Postal code | `94103` |
 | `country` | ISO 3166-1 alpha-2 country code | `US` |
-| `email` | Email (required for international senders) | `jane@example.com` |
-| `phone` | Phone (required for international senders) | `+1-555-123-4567` |
+| `email` | Email (required on the sender for every USPS label, and for international senders) | `jane@example.com` |
+| `phone` | Phone (required on the sender for every USPS label, and for international senders) | `+1-555-123-4567` |
 
 Note: `CreateAddress` and `ValidateAddress` take the v2 field names (`address_line_1`, `city_locality`, `state_province`, `postal_code`), but when passing addresses inline to `CreateShipment`, you must use the v1 names above.
 

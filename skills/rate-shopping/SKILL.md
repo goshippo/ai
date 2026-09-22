@@ -8,7 +8,7 @@ description: Compare multi-carrier shipping rates, find cheapest/fastest options
 ## Get Rates for a Shipment
 
 1. Collect: origin address, destination address, parcel (length, width, height, distance_unit, weight, mass_unit). All dimension and weight values must be **strings** (e.g., `"10"` not `10`).
-2. Optionally validate both addresses with `ValidateAddress` (see Address Validation).
+2. Validate both addresses with `ValidateAddress` when they were typed in or come from an unverified source (see Address Validation). If the user will buy a USPS rate, the sender needs `email` and `phone`.
 3. Call `CreateShipment` with `address_from`, `address_to` (as inline address objects using v1 field names -- `street1`, `city`, `state`, `zip`, `country` -- not object IDs), and `parcels`.
 4. The response `rates` array contains available options. Present a table: carrier, service level, price, estimated days.
 5. Note: the same carrier may return duplicate rates from multiple carrier accounts. Present the best rate per carrier/service combination.
@@ -64,4 +64,4 @@ Identify the cheapest (lowest `amount`), fastest (lowest `estimated_days`), and 
 ## Quick Reference
 
 **Get rates:**
-(optional) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses) -> read `rates` array
+(recommended for typed or unverified addresses) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses) -> read `rates` array

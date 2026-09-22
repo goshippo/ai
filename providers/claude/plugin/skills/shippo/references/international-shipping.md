@@ -13,7 +13,7 @@ Country-specific requirements, duty/tax considerations, and international shippi
 ## General Requirements for All International Shipments
 
 1. **Customs declaration required.** Attach via `customs_declaration` field on the shipment. See customs-guide.md for full details.
-2. **Sender email and phone required.** All major carriers require these on `address_from` for customs processing.
+2. **Sender email and phone required.** All major carriers require these on `address_from` for customs processing. USPS requires both on every label, domestic included (see address-formats.md).
 3. **HS/tariff codes strongly recommended.** USPS requires them (6+ digits) as of September 2025. FedEx and DHL strongly recommend them.
 4. **Commercial invoice auto-generated.** Shippo generates 3 copies automatically. The URL is in the transaction response.
 5. **Declared values must be accurate.** Under-declaration is illegal and may result in fines, seizure, or shipment refusal.
@@ -112,5 +112,5 @@ When a user mentions any of these categories, advise them to verify destination 
 3. **Use DDP for better customer experience** when supported by the carrier and when the seller has tax registration.
 4. **Set EEL/PFC** on customs declarations for US-origin shipments. Use `NOEEI_30_36` for Canada, `NOEEI_30_37_a` for other destinations under $2,500.
 5. **Declare accurate values.** Under-declaration risks fines and seizure.
-6. **Include sender email and phone.** All carriers require this for international shipments.
+6. **Include sender email and phone.** All carriers require this for international shipments, and USPS requires both on every label regardless of destination.
 7. **Check DHL Express for non-North-America routes.** DHL typically has the best coverage and speed for international shipments.

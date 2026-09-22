@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## 1.5.5
+
+`package.json:version` 1.5.4 -> 1.5.5. Corrects the USPS sender-contact rule across the skills and references.
+
+### Fixed
+- `address-validation`, `label-purchase`, `rate-shopping`, `shippo/references/csv-format.md`, `shippo/references/address-formats.md`: sender `email` and `phone` are required on every USPS label, not only for international senders. A USPS label bought without them fails at purchase, after the account has been charged, with the cause in the transaction's messages and a `ShippoCredit` entry that is an automatic refund, not a USPS outage. The domestic label-purchase flow now carries the same "ask if missing, never invent them" rule as the international flow.
+- Address validation is now "recommended for typed or unverified addresses" instead of "optional" in the label-purchase and rate-shopping flows; `Recipient address invalid: Address not found` is the second most common cause of failed USPS purchases from agents.
+
+### Changed
+- ClawHub bundle 1.4.4 -> 1.4.5: republishes the digest with the corrections above.
+
 ## 1.5.2
 
 `package.json:version` 1.5.1 -> 1.5.2. Ships the parameter-casing and error-guidance corrections below to the Claude app-plugin release (`shippo-plugin.zip`).
