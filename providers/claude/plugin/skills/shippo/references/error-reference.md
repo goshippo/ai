@@ -60,6 +60,16 @@ Common Shippo API errors, their causes, and recovery steps.
 
 ## Label Purchase Errors
 
+### Sender email or phone missing (USPS)
+- **Pattern:** transaction `status` `ERROR` with a message `Attribute "address_from.email" must not be empty.`, `Attribute "address_from.phone" must not be empty.`, or `Seller info missing email or phone`. A second message with code `ShippoCredit` may follow.
+- **Cause:** USPS requires email and phone on `address_from` for every label, regardless of destination. Rates are still returned without them; the purchase is what fails, after the account has been charged. The `ShippoCredit` message means the charge is credited back automatically. It is not a carrier outage and there is nothing to undo.
+- **Recovery:** Ask the user for the sender's own email and phone (never invent them, never copy the recipient's), create a corrected shipment, pick a new rate, then purchase. Do not retry the same rate.
+
+### Recipient address rejected at purchase
+- **Pattern:** transaction `status` `ERROR` with `Recipient address invalid: Address not found` or `Multiple addresses were found`.
+- **Cause:** The address passed rating but USPS could not resolve it at purchase.
+- **Recovery:** Run `ValidateAddress`, apply the recommended address, create a new shipment and purchase a fresh rate.
+
 ### Rate expired
 - **Pattern:** `"Rate has expired"` or `"Rate is no longer valid"`
 - **Cause:** Rates expire after 7 days. The user waited too long between getting rates and purchasing.
@@ -88,6 +98,11 @@ Common Shippo API errors, their causes, and recovery steps.
 - **Pattern:** Batch status `INVALID` with per-shipment errors showing address issues
 - **Cause:** One or more shipments in the batch have invalid addresses.
 - **Recovery:** Call `GetBatch` to identify which shipments failed. Fix the addresses and either update the batch or create a new one with corrected data.
+
+### Shipments failed inside a PURCHASED batch
+- **Pattern:** batch `status` `PURCHASED` but `object_results.purchase_failed` is above 0; those rows have `batch_shipments[].status` `TRANSACTION_FAILED` with the cause in their `messages`.
+- **Cause:** Batch validation does not run carrier checks. For USPS the most common cause is a missing sender email or phone (`Attribute "address_from.email" must not be empty.`, `.phone`, or `Seller info missing email or phone`).
+- **Recovery:** Fetch the failed rows with `GetBatch` and `object_results=purchase_failed`. A purchased batch cannot take new shipments: fix the sender address and create a new batch for the failed rows. Report the purchase as partial, never as complete.
 
 ### Missing required fields
 - **Pattern:** `"Missing required field"` on batch creation

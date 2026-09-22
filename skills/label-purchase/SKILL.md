@@ -25,7 +25,7 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 
 ## Domestic Label
 
-1. Optionally validate both addresses with `ValidateAddress` (see Address Validation).
+1. Validate both addresses with `ValidateAddress` when they were typed in or come from an unverified source (see Address Validation). For USPS the sender must include `email` and `phone`; ask if missing, never invent them.
 2. Call `CreateShipment` with `address_from`, `address_to` (as inline address objects using v1 field names -- `street1`, `city`, `state`, `zip`, `country`), `parcels`, and `async: false`.
 3. Present rates to the user. Let them choose.
 4. **Confirm purchase** (see Purchase Confirmation Gate above).
@@ -33,7 +33,7 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 6. Check response `status`:
    - `SUCCESS`: return `tracking_number`, `label_url` (display the COMPLETE URL -- S3 signed URLs break if truncated), and `tracking_url_provider`.
    - `QUEUED`/`WAITING`: poll `GetTransaction` until resolved.
-   - `ERROR`: report messages from the `messages` array.
+   - `ERROR`: no label was issued. The cause is every `messages` entry whose code is not `ShippoCredit`. `Attribute "address_from.email" must not be empty.` (or `.phone`) or `Seller info missing email or phone` means USPS needs the sender's email and phone: ask the user, never invent them. `Recipient address invalid` means run `ValidateAddress` and fix the address. A `ShippoCredit` entry means the charge is credited back automatically; it is not a carrier outage and there is nothing to undo. Do not retry the same rate: create a corrected shipment and purchase a new rate.
 
 ---
 
@@ -41,7 +41,7 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 
 All domestic steps apply, plus customs handling before shipment creation. See `shippo/references/customs-guide.md` for the full customs workflow.
 
-1. Optionally validate addresses with `ValidateAddress`. Sender must include `email` and `phone`. Ask if missing.
+1. Validate addresses with `ValidateAddress` when they were typed in or come from an unverified source. Sender must include `email` and `phone` (every USPS label, and all international shipments). Ask if missing, never invent them.
 2. Create customs items: call `CreateCustomsItem` per item (description, quantity, net_weight, mass_unit, value_amount, value_currency, origin_country, tariff_number). Alternatively, you can skip this step and pass inline item objects directly in the declaration (step 3).
 3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See `shippo/references/customs-guide.md` for field details.
 4. Call `CreateShipment` with all standard fields plus `customs_declaration` (the declaration object_id).
@@ -113,10 +113,10 @@ Call `CreateRefund` with the transaction object_id.
 ## Quick Reference
 
 **Domestic label:**
-(optional) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses) -> user picks rate -> confirm -> `CreateTransaction`
+(recommended for typed or unverified addresses) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses; USPS needs sender `email` + `phone`) -> user picks rate -> confirm -> `CreateTransaction`
 
 **International label:**
-(optional) `ValidateAddress` (x2) -> `CreateCustomsItem` (per item) -> `CreateCustomsDeclaration` -> `CreateShipment` (with inline addresses + customs_declaration) -> user picks rate -> confirm -> `CreateTransaction`
+(recommended for typed or unverified addresses) `ValidateAddress` (x2) -> `CreateCustomsItem` (per item) -> `CreateCustomsDeclaration` -> `CreateShipment` (with inline addresses + customs_declaration) -> user picks rate -> confirm -> `CreateTransaction`
 
 **Return label:**
 Same as domestic/international, but swap `address_from` and `address_to`.

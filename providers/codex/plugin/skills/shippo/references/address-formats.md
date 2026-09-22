@@ -29,7 +29,7 @@ Used by: `CreateShipment` (inline addresses), `CreateBatch`, `CreateAddress`, `C
 | `email` | No* | Email address |
 | `is_residential` | No | Boolean, whether the address is residential |
 
-*Phone and email are required for international shipments (carriers need them for customs processing).
+*Phone and email are required on the sender for every USPS label, and on both parties for international shipments (carriers need them for customs processing).
 
 ### V1 Inline Address Example (for shipments-create)
 
@@ -69,6 +69,8 @@ Returned by: `ParseAddress`
 | `phone` | No* | Phone number |
 | `email` | No* | Email address |
 | `is_residential` | No | Boolean |
+
+*Phone and email are required on the sender for every USPS label, and on both parties for international shipments. Collect both up front; a USPS purchase without them fails at carrier validation, after the account has been charged.
 
 ### V2 Address Example (for addresses-create-v2)
 
@@ -141,4 +143,4 @@ When you get a parse result (v2) and need to use it in `CreateShipment` (v1):
 
 ### Phone Numbers
 - Include country code prefix for international shipments (e.g., `+1` for US, `+44` for UK, `+49` for DE).
-- Required for international shipments by all major carriers.
+- Required on the sender for every USPS label, and for international shipments by all major carriers.

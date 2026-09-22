@@ -1,7 +1,7 @@
 ---
 name: shippo
 description: "A shipping and logistics skill for Shippo. Get multi-carrier rates (USPS, UPS, FedEx, DHL, 30+), buy domestic and international labels with customs, validate addresses, track packages with webhooks, and run bulk CSV batches, plus cost analysis, integration routing, and SDK-upgrade help. Runs through Shippo's hosted MCP with per-user OAuth (sign in once, nothing to copy or store). Uses Shippo's discounted carrier rates."
-version: 1.4.4
+version: 1.4.5
 license: MIT
 metadata:
   openclaw:
@@ -123,8 +123,8 @@ The Shippo API uses **v1 field names** for address components in most endpoints 
 | `state` | State or province | `CA` |
 | `zip` | Postal code | `94103` |
 | `country` | ISO 3166-1 alpha-2 country code | `US` |
-| `email` | Email (required for international senders) | `jane@example.com` |
-| `phone` | Phone (required for international senders) | `+1-555-123-4567` |
+| `email` | Email (required on the sender for every USPS label, and for international senders) | `jane@example.com` |
+| `phone` | Phone (required on the sender for every USPS label, and for international senders) | `+1-555-123-4567` |
 
 Note: `CreateAddress` and `ValidateAddress` take the v2 field names (`address_line_1`, `city_locality`, `state_province`, `postal_code`), but when passing addresses inline to `CreateShipment`, you must use the v1 names above.
 
@@ -192,7 +192,7 @@ If `CreateAddress` returns a "Duplicate address" error, the address already exis
 ### Get Rates for a Shipment
 
 1. Collect: origin address, destination address, parcel (length, width, height, distance_unit, weight, mass_unit). All dimension and weight values must be **strings** (e.g., `"10"` not `10`).
-2. Optionally validate both addresses with `ValidateAddress` (see Address Validation).
+2. Validate both addresses with `ValidateAddress` when they were typed in or come from an unverified source (see Address Validation). If the user will buy a USPS rate, the sender needs `email` and `phone`.
 3. Call `CreateShipment` with `address_from`, `address_to` (as inline address objects using v1 field names -- `street1`, `city`, `state`, `zip`, `country` -- not object IDs), and `parcels`.
 4. The response `rates` array contains available options. Present a table: carrier, service level, price, estimated days.
 5. Note: the same carrier may return duplicate rates from multiple carrier accounts. Present the best rate per carrier/service combination.
@@ -248,7 +248,7 @@ Identify the cheapest (lowest `amount`), fastest (lowest `estimated_days`), and 
 ### Quick Reference
 
 **Get rates:**
-(optional) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses) -> read `rates` array
+(recommended for typed or unverified addresses) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses) -> read `rates` array
 
 ---
 
@@ -274,7 +274,7 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 
 ### Domestic Label
 
-1. Optionally validate both addresses with `ValidateAddress` (see Address Validation).
+1. Validate both addresses with `ValidateAddress` when they were typed in or come from an unverified source (see Address Validation). For USPS the sender must include `email` and `phone`; ask if missing, never invent them.
 2. Call `CreateShipment` with `address_from`, `address_to` (as inline address objects using v1 field names -- `street1`, `city`, `state`, `zip`, `country`), `parcels`, and `async: false`.
 3. Present rates to the user. Let them choose.
 4. **Confirm purchase** (see Purchase Confirmation Gate above).
@@ -282,7 +282,7 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 6. Check response `status`:
    - `SUCCESS`: return `tracking_number`, `label_url` (display the COMPLETE URL -- S3 signed URLs break if truncated), and `tracking_url_provider`.
    - `QUEUED`/`WAITING`: poll `GetTransaction` until resolved.
-   - `ERROR`: report messages from the `messages` array.
+   - `ERROR`: no label was issued. The cause is every `messages` entry whose code is not `ShippoCredit`. `Attribute "address_from.email" must not be empty.` (or `.phone`) or `Seller info missing email or phone` means USPS needs the sender's email and phone: ask the user, never invent them. `Recipient address invalid` means run `ValidateAddress` and fix the address. A `ShippoCredit` entry means the charge is credited back automatically; it is not a carrier outage and there is nothing to undo. Do not retry the same rate: create a corrected shipment and purchase a new rate.
 
 ---
 
@@ -290,7 +290,7 @@ Before every call to `CreateTransaction`, summarize the following and ask the us
 
 All domestic steps apply, plus customs handling before shipment creation. See `shippo/references/customs-guide.md` for the full customs workflow.
 
-1. Optionally validate addresses with `ValidateAddress`. Sender must include `email` and `phone`. Ask if missing.
+1. Validate addresses with `ValidateAddress` when they were typed in or come from an unverified source. Sender must include `email` and `phone` (every USPS label, and all international shipments). Ask if missing, never invent them.
 2. Create customs items: call `CreateCustomsItem` per item (description, quantity, net_weight, mass_unit, value_amount, value_currency, origin_country, tariff_number). Alternatively, you can skip this step and pass inline item objects directly in the declaration (step 3).
 3. Create the customs declaration: call `CreateCustomsDeclaration` with contents_type, non_delivery_option, certify: true, certify_signer, and the items (either object_ids from step 2, or inline item objects). See `shippo/references/customs-guide.md` for field details.
 4. Call `CreateShipment` with all standard fields plus `customs_declaration` (the declaration object_id).
@@ -362,10 +362,10 @@ Call `CreateRefund` with the transaction object_id.
 ### Quick Reference
 
 **Domestic label:**
-(optional) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses) -> user picks rate -> confirm -> `CreateTransaction`
+(recommended for typed or unverified addresses) `ValidateAddress` (x2) -> `CreateShipment` (with inline addresses; USPS needs sender `email` + `phone`) -> user picks rate -> confirm -> `CreateTransaction`
 
 **International label:**
-(optional) `ValidateAddress` (x2) -> `CreateCustomsItem` (per item) -> `CreateCustomsDeclaration` -> `CreateShipment` (with inline addresses + customs_declaration) -> user picks rate -> confirm -> `CreateTransaction`
+(recommended for typed or unverified addresses) `ValidateAddress` (x2) -> `CreateCustomsItem` (per item) -> `CreateCustomsDeclaration` -> `CreateShipment` (with inline addresses + customs_declaration) -> user picks rate -> confirm -> `CreateTransaction`
 
 **Return label:**
 Same as domestic/international, but swap `address_from` and `address_to`.
@@ -472,7 +472,7 @@ Before every call to `PurchaseBatch`, summarize the following and ask the user f
 See `shippo/references/csv-format.md` for the column specification.
 
 1. Read and parse the CSV. Validate required columns are present. Report row count.
-2. Validate each row for non-empty required fields. Report invalid rows with reasons.
+2. Validate each row for non-empty required fields. Report invalid rows with reasons. For USPS rows, `sender_email` and `sender_phone` must be non-empty: batch validation does not check this, and the label fails at purchase instead. Ask the user for the sender's email and phone if missing; never invent them.
 3. Detect international rows (sender_country != recipient_country). Create customs declarations for those rows. See `shippo/references/customs-guide.md`. Use correct customs enum values: `RETURN_MERCHANDISE` (not `RETURN`) for returned goods, `HUMANITARIAN_DONATION` (not `HUMANITARIAN`) for charitable donations.
 4. Build the `batch_shipments` array with inline address and parcel objects per row.
 5. Call `CreateBatch` with the array.
@@ -480,7 +480,7 @@ See `shippo/references/csv-format.md` for the column specification.
 7. If the status is `INVALID`, some batch shipments failed validation: see "Fixing an INVALID batch" below, fix them, and re-poll until `VALID`. Report per-shipment failures either way before proceeding.
 8. **Confirm purchase** (see Purchase Confirmation Gate above).
 9. Call `PurchaseBatch` to buy labels for all valid shipments.
-10. Poll `GetBatch` until status changes from `PURCHASING` to `PURCHASED`. See Polling Intervals below.
+10. Poll `GetBatch` until status changes from `PURCHASING` to `PURCHASED`. See Polling Intervals below. `PURCHASED` means the purchase finished, not that every label succeeded: check `object_results.purchase_failed`, and fetch the failed rows with `object_results=purchase_failed`. Each failed shipment has status `TRANSACTION_FAILED` with the cause in its `messages` (for USPS most often a missing sender email or phone).
 11. Report: total attempted, succeeded, failed. For successes: tracking_number and label_url (complete URL). For failures: error messages.
 
 #### Retrieving batch labels
@@ -522,7 +522,7 @@ For batches over 500 shipments, consider splitting into multiple batches. Large 
 
 If `GetBatch` returns status `INVALID`, one or more batch shipments failed validation and the batch cannot be purchased until they are fixed.
 
-1. **Find the failures.** Call `GetBatch` with `object_results=creation_failed` to return only the failed shipments (paginate with `?page=` if there are many), or read each `batch_shipments[].status` (`VALID` / `INVALID` / `INCOMPLETE` / `TRANSACTION_FAILED`) and its `messages` for the reason. The batch-level `errors` array collects the same per-shipment failures in one place.
+1. **Find the failures.** Call `GetBatch` with `object_results=creation_failed` to return only the failed shipments (paginate with `?page=` if there are many), or read each `batch_shipments[].status` (`VALID` / `INVALID` / `INCOMPLETE` / `TRANSACTION_FAILED`) and its `messages` for the reason. There is no batch-level errors roll-up in the response; `object_results` carries the counts and the `object_results` filter returns just the rows in one state.
 2. **Fix them,** either:
    - Remove: `RemoveShipmentsFromBatch` with the failed batch-shipment `object_id`s (from `batch_shipments[].object_id`, not the shipment object_id) to drop them, or
    - Correct and re-add: `AddShipmentsToBatch` with corrected shipment objects (fixed address, parcel, or servicelevel).

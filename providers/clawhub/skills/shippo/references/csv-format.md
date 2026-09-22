@@ -23,8 +23,8 @@ Every row must have non-empty values for all required columns. Rows missing requ
 | `sender_state` | Sender state/province | `CA` |
 | `sender_zip` | Sender postal code | `94103` |
 | `sender_country` | Sender country (ISO 3166-1 alpha-2) | `US` |
-| `sender_email` | Sender email (column required; value may be empty for domestic rows but must be non-empty for international) | `jane@example.com` |
-| `sender_phone` | Sender phone (column required; value may be empty for domestic rows but must be non-empty for international) | `+1-555-123-4567` |
+| `sender_email` | Sender email (column required; value must be non-empty for every USPS row and for international rows; other carriers accept an empty value on domestic rows) | `jane@example.com` |
+| `sender_phone` | Sender phone (column required; value must be non-empty for every USPS row and for international rows; other carriers accept an empty value on domestic rows) | `+1-555-123-4567` |
 | `recipient_name` | Recipient full name | `John Doe` |
 | `recipient_street1` | Recipient street address | `456 Oak Ave` |
 | `recipient_city` | Recipient city | `Portland` |
@@ -95,7 +95,7 @@ Notes about the sample:
 ### International Detection
 - Compare `sender_country` and `recipient_country` for each row.
 - If they differ, the row is international and requires a customs declaration.
-- For international rows, `sender_email` and `sender_phone` are mandatory (carriers require them for customs). Flag any international row missing these fields.
+- For USPS rows and for international rows, `sender_email` and `sender_phone` are mandatory (USPS requires them on every label; other carriers require them for customs). Flag any such row missing these fields; a USPS label bought without them fails at purchase, after the account has been charged.
 
 ### Encoding
 - Expect UTF-8 encoding. If parsing fails, ask the user to verify the file is UTF-8 encoded.
